@@ -57,6 +57,7 @@ class AgentResponse(BaseModel):
     area_reason: str
     travel_summary: dict
     restaurants: list[RestaurantResult]
+    warning: str | None = None
 
 
 class VoteStatus(BaseModel):

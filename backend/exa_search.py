@@ -7,7 +7,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from exa_py import Exa
 
-from backend.aws_config import REGION
+from backend.aws_config import REGION, VERIFY_SSL
 
 BUCKET_NAME = "tablefor-exa-cache"
 CACHE_TTL_HOURS = 6
@@ -38,7 +38,7 @@ PHOTO_DOMAINS = [
     "tripadvisor.com.sg",
 ]
 
-_s3 = boto3.client("s3", region_name=REGION)
+_s3 = boto3.client("s3", region_name=REGION, verify=VERIFY_SSL)
 _exa: Exa | None = None
 _bucket_ready = False
 _cache_enabled = True
@@ -287,3 +287,72 @@ def search_opening_hours(restaurant_name: str) -> str | None:
                     if 10 < len(cleaned) < 150:
                         return cleaned
     return None
+
+
+def search_menu(restaurant_name: str) -> dict | None:
+    """Search for a restaurant's menu items and prices via Exa (Pro feature)."""
+    query = f"{restaurant_name} Singapore menu prices"
+    results = search_with_cache(
+        query,
+        num_results=3,
+        include_domains=RESTAURANT_DOMAINS + ["grab.com", "foodpanda.sg", "deliveroo.com.sg"],
+    )
+
+    if not results:
+        return None
+
+    # Extract menu-like content from search results
+    menu_items = []
+    source_url = None
+
+    for r in results:
+        text = r.get("text", "")
+        url = r.get("url", "")
+        if not text:
+            continue
+
+        if not source_url:
+            source_url = url
+
+        # Look for lines that might be menu items (contain $ or price patterns)
+        lines = text.split("\n")
+        for line in lines:
+            line = line.strip()
+            if not line or len(line) < 5 or len(line) > 200:
+                continue
+            # Lines with $ signs or "S$" are likely menu items
+            if "$" in line or any(
+                kw in line.lower()
+                for kw in ["per pax", "per person", "set meal", "ala carte"]
+            ):
+                menu_items.append(line)
+            # Also grab lines that look like dish names (capitalized, reasonable length)
+            elif (
+                len(line) > 8
+                and len(line) < 80
+                and not line.startswith("http")
+                and any(c.isupper() for c in line[:3])
+            ):
+                menu_items.append(line)
+
+        if len(menu_items) >= 15:
+            break
+
+    if not menu_items:
+        # Fallback: return the raw text snippet
+        best_text = results[0].get("text", "")[:500] if results else None
+        if best_text:
+            return {
+                "restaurant_name": restaurant_name,
+                "menu_items": [best_text],
+                "source_url": results[0].get("url", ""),
+                "note": "Full menu details may vary. Check the source link for the latest menu.",
+            }
+        return None
+
+    return {
+        "restaurant_name": restaurant_name,
+        "menu_items": menu_items[:15],
+        "source_url": source_url,
+        "note": "Prices may vary. Check the source link for the latest menu.",
+    }

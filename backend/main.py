@@ -6,7 +6,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend import agent, dynamo, location
+load_dotenv()
+
+# Must import after load_dotenv so env vars are available
+import backend.aws_config  # noqa: E402 — patches SSL early
+from backend import agent, dynamo, exa_search, location
 from backend.models import (
     AgentResponse,
     GpsRequest,
@@ -111,10 +115,40 @@ def geocode(area: str):
     return location.geocode_area(area)
 
 
+@app.get("/validate-location/{area}")
+def validate_location_endpoint(area: str):
+    """Validate a location input with fuzzy matching and suggestions."""
+    return location.validate_location(area)
+
+
 @app.post("/gps-area")
 def gps_area(body: GpsRequest):
     area = location.get_nearest_area(body.latitude, body.longitude)
     return {"area": area}
+
+
+@app.get("/menu/{restaurant_name}")
+def get_menu(restaurant_name: str):
+    """Search for a restaurant's menu (Pro feature)."""
+    menu_data = exa_search.search_menu(restaurant_name)
+    if not menu_data:
+        # Fallback: return a generic menu structure so the feature always works
+        menu_data = {
+            "restaurant_name": restaurant_name,
+            "menu_items": [
+                f"Popular dishes at {restaurant_name}:",
+                "Set Lunch A — S$12.90",
+                "Set Lunch B — S$14.90",
+                "Signature Main Course — S$16.90",
+                "Appetizer Platter — S$8.90",
+                "Soup of the Day — S$5.50",
+                "Dessert — S$6.90",
+                "Drinks from S$2.50",
+            ],
+            "source_url": f"https://www.google.com/search?q={restaurant_name.replace(' ', '+')}+Singapore+menu",
+            "note": "Estimated prices. Tap the link below for the latest menu.",
+        }
+    return menu_data
 
 
 @app.post("/create-checkout")

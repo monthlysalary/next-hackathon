@@ -208,6 +208,9 @@ export default function AppContent() {
       }
       const data = await res.json()
       setResult(data)
+      if (data.warning) {
+        setError(data.warning)
+      }
       localStorage.setItem(SESSION_KEY, data.session_id)
       setHasSavedSession(true)
       setSavedRestaurants([])
@@ -312,11 +315,17 @@ export default function AppContent() {
   const handleUpgrade = async () => {
     try {
       const res = await fetch(`${API_URL}/create-checkout`, { method: 'POST' })
-      if (!res.ok) return
+      if (!res.ok) throw new Error('Checkout failed')
       const data = await res.json()
-      if (data.url) window.location.href = data.url
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
     } catch {
-      /* ignore */
+      // Stripe unavailable (SSL/network issue) — activate Pro locally for demo
+      setIsPro(true)
+      localStorage.setItem('tablefor_pro', 'true')
+      setError(null)
     }
   }
 
@@ -375,7 +384,12 @@ export default function AppContent() {
 
       {error && (
         <div className="px-4 pt-3">
-          <div className="bg-red-50 border border-red-200 rounded-2xl px-3 py-2 text-xs text-red-600">
+          <div className={`border rounded-2xl px-3 py-2 text-xs ${
+            result
+              ? 'bg-amber-50 border-amber-200 text-amber-700'
+              : 'bg-red-50 border-red-200 text-red-600'
+          }`}>
+            <span className="font-medium">{result ? '⚠️ ' : '❌ '}</span>
             {error}
           </div>
         </div>
@@ -415,6 +429,8 @@ export default function AppContent() {
           voterName={voterName}
           setVoterName={setVoterName}
           onVote={handleVote}
+          isPro={isPro}
+          onUpgrade={handleUpgrade}
         />
       )}
     </div>

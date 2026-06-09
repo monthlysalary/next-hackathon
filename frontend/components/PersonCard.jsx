@@ -48,6 +48,7 @@ function PillGroup({ options, selected, onChange, multi = true }) {
 
 export default function PersonCard({ person, index, onChange, onRemove, canRemove }) {
   const [suggestions, setSuggestions] = useState([])
+  const [locationError, setLocationError] = useState(null)
   const [gpsLoading, setGpsLoading] = useState(false)
   const [expanded, setExpanded] = useState(index < 2)
 
@@ -55,21 +56,50 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
     onChange(index, { ...person, [field]: value })
   }
 
-  const handleLocationInput = (value) => {
+  const handleLocationInput = async (value) => {
     update('location', value)
-    if (value.length > 0) {
+    if (value.length >= 2) {
+      // Try backend validation for fuzzy matching
+      try {
+        const res = await fetch(
+          `${API_URL}/validate-location/${encodeURIComponent(value)}`,
+        )
+        if (res.ok) {
+          const data = await res.json()
+          if (data.valid) {
+            setSuggestions([data.area])
+            setLocationError(null)
+          } else if (data.suggestions.length > 0) {
+            setSuggestions(data.suggestions)
+            setLocationError(data.message)
+          } else {
+            // Fall back to local filter
+            const filtered = SINGAPORE_AREAS.filter((a) =>
+              a.toLowerCase().includes(value.toLowerCase()),
+            )
+            setSuggestions(filtered.slice(0, 4))
+            setLocationError(filtered.length === 0 ? data.message : null)
+          }
+          return
+        }
+      } catch {
+        // Backend unavailable — fall back to local filter
+      }
       const filtered = SINGAPORE_AREAS.filter((a) =>
         a.toLowerCase().includes(value.toLowerCase()),
       )
       setSuggestions(filtered.slice(0, 4))
+      setLocationError(null)
     } else {
       setSuggestions([])
+      setLocationError(null)
     }
   }
 
   const selectArea = (area) => {
     update('location', area)
     setSuggestions([])
+    setLocationError(null)
   }
 
   const handleGps = () => {
@@ -190,6 +220,9 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
                     </li>
                   ))}
                 </ul>
+              )}
+              {locationError && suggestions.length === 0 && (
+                <p className="mt-1 text-[10px] text-amber-600">{locationError}</p>
               )}
             </div>
           </div>
