@@ -21,6 +21,17 @@ class GroupRequest(BaseModel):
     day: str
 
 
+class RefineRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+class VoteRequest(BaseModel):
+    session_id: str
+    voter_name: str
+    restaurant_name: str
+
+
 class RestaurantResult(BaseModel):
     name: str
     area: str
@@ -36,6 +47,8 @@ class RestaurantResult(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     match_score: int
+    photo_url: str | None = None
+    opening_hours: str | None = None
 
 
 class AgentResponse(BaseModel):
@@ -44,6 +57,11 @@ class AgentResponse(BaseModel):
     area_reason: str
     travel_summary: dict
     restaurants: list[RestaurantResult]
+
+
+class VoteStatus(BaseModel):
+    votes: dict[str, list[str]]  # restaurant_name -> list of voter names
+    total_voters: int
 
 
 class GpsRequest(BaseModel):

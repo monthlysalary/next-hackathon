@@ -10,13 +10,40 @@ export default function ResultsPanel({
   onStartOver,
   savedRestaurants,
   onRestaurantSaved,
+  onRefine,
+  loading,
+  votes,
+  voters,
+  voterName,
+  setVoterName,
+  onVote,
 }) {
   const [showMap, setShowMap] = useState(false)
+  const [refineInput, setRefineInput] = useState('')
+  const [showVoterInput, setShowVoterInput] = useState(!voterName)
+  const [copied, setCopied] = useState(false)
 
   const handleShare = () => {
-    const url = new URL(window.location.href)
+    const url = new URL(window.location.origin)
     url.searchParams.set('session', result.session_id)
-    navigator.clipboard.writeText(url.toString())
+    navigator.clipboard.writeText(url.toString()).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  const handleRefineSubmit = (e) => {
+    e.preventDefault()
+    if (!refineInput.trim() || loading) return
+    onRefine(refineInput.trim())
+    setRefineInput('')
+  }
+
+  const handleSetVoter = (e) => {
+    e.preventDefault()
+    if (voterName.trim()) {
+      setShowVoterInput(false)
+    }
   }
 
   const withCoords = persons.filter((p) => p.latitude && p.longitude)
@@ -29,6 +56,13 @@ export default function ResultsPanel({
             withCoords.reduce((s, p) => s + p.longitude, 0) / withCoords.length,
         }
       : { latitude: 1.352, longitude: 103.848 }
+
+  // Calculate vote winner
+  const voteEntries = Object.entries(votes || {})
+  const maxVotes = voteEntries.reduce(
+    (max, [, v]) => Math.max(max, (v || []).length),
+    0,
+  )
 
   return (
     <div className="px-4 py-4 pb-8">
@@ -51,9 +85,13 @@ export default function ResultsPanel({
         <button
           type="button"
           onClick={handleShare}
-          className="ml-auto px-3 py-1.5 text-[11px] border border-border rounded-[14px] text-text-secondary hover:text-accent hover:border-accent transition-colors bg-white shadow-card"
+          className={`ml-auto px-3 py-1.5 text-[11px] border rounded-[14px] transition-colors bg-white shadow-card ${
+            copied
+              ? 'border-green-400 text-green-600'
+              : 'border-border text-text-secondary hover:text-accent hover:border-accent'
+          }`}
         >
-          Share
+          {copied ? '✓ Link copied!' : '📤 Share & Vote'}
         </button>
       </div>
 
@@ -77,9 +115,92 @@ export default function ResultsPanel({
         </div>
       </div>
 
+      {/* Voting section */}
+      <div className="bg-purple-50 border border-purple-200 rounded-[20px] p-3.5 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold text-purple-700">
+            🗳️ Group Vote {voters.length > 0 && `(${voters.length} voted)`}
+          </h3>
+          {!showVoterInput && voterName && (
+            <button
+              type="button"
+              onClick={() => setShowVoterInput(true)}
+              className="text-[10px] text-purple-600 hover:text-purple-800"
+            >
+              Voting as: {voterName} ✎
+            </button>
+          )}
+        </div>
+
+        {showVoterInput ? (
+          <form onSubmit={handleSetVoter} className="flex gap-2">
+            <input
+              type="text"
+              value={voterName}
+              onChange={(e) => setVoterName(e.target.value)}
+              placeholder="Enter your name to vote"
+              className="flex-1 px-3 py-2 rounded-[12px] text-xs bg-white border border-purple-200 outline-none focus:border-purple-400"
+            />
+            <button
+              type="submit"
+              disabled={!voterName.trim()}
+              className="px-3 py-2 rounded-[12px] text-xs font-medium bg-purple-600 text-white disabled:opacity-40"
+            >
+              Set
+            </button>
+          </form>
+        ) : (
+          <div className="space-y-1.5">
+            {result.restaurants.map((r) => {
+              const rVotes = votes[r.name] || []
+              const isWinner = rVotes.length === maxVotes && maxVotes > 0
+              const myVote = rVotes.includes(voterName)
+              return (
+                <div
+                  key={r.name}
+                  className={`flex items-center gap-2 p-2 rounded-[12px] transition-colors ${
+                    myVote
+                      ? 'bg-purple-100 border border-purple-300'
+                      : 'bg-white border border-purple-100'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onVote(r.name)}
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                      myVote
+                        ? 'border-purple-600 bg-purple-600'
+                        : 'border-purple-300'
+                    }`}
+                  >
+                    {myVote && (
+                      <span className="text-white text-[10px]">✓</span>
+                    )}
+                  </button>
+                  <span className="text-[11px] text-text-primary flex-1 truncate">
+                    {r.name}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    {isWinner && <span className="text-[10px]">👑</span>}
+                    <span className="text-[10px] font-medium text-purple-700">
+                      {rVotes.length}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+            {voters.length > 0 && (
+              <p className="text-[10px] text-purple-500 pt-1">
+                Voters: {voters.join(', ')}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Map or cards */}
       {showMap ? (
-        <div className="h-[400px] rounded-[20px] overflow-hidden border border-border shadow-card">
+        <div className="h-[400px] rounded-[20px] overflow-hidden border border-border shadow-card mb-4">
           <MapView
             persons={persons}
             suggestedArea={result.suggested_area}
@@ -88,7 +209,7 @@ export default function ResultsPanel({
           />
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 mb-4">
           {result.restaurants.map((r, i) => (
             <RestaurantCard
               key={r.name}
@@ -97,10 +218,42 @@ export default function ResultsPanel({
               sessionId={result.session_id}
               saved={savedRestaurants?.includes(r.name)}
               onSaved={onRestaurantSaved}
+              voteCount={(votes[r.name] || []).length}
+              isWinner={
+                (votes[r.name] || []).length === maxVotes && maxVotes > 0
+              }
             />
           ))}
         </div>
       )}
+
+      {/* Refine / Chat input */}
+      <div className="sticky bottom-0 bg-bg pt-2 pb-1">
+        <form onSubmit={handleRefineSubmit} className="flex gap-2">
+          <input
+            type="text"
+            value={refineInput}
+            onChange={(e) => setRefineInput(e.target.value)}
+            placeholder="Quieter options? Cheaper? Tell me..."
+            disabled={loading}
+            className="flex-1 px-3.5 py-3 rounded-[16px] text-xs bg-white border border-border outline-none focus:border-accent shadow-card placeholder:text-text-secondary/60"
+          />
+          <button
+            type="submit"
+            disabled={!refineInput.trim() || loading}
+            className="px-4 py-3 rounded-[16px] bg-accent hover:bg-accent-hover text-white text-xs font-medium disabled:opacity-40 transition-colors shadow-card"
+          >
+            {loading ? (
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin inline-block" />
+            ) : (
+              '→'
+            )}
+          </button>
+        </form>
+        <p className="text-[10px] text-text-secondary text-center mt-1.5">
+          Type adjustments to get new recommendations
+        </p>
+      </div>
     </div>
   )
 }
