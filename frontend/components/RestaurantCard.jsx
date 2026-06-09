@@ -79,8 +79,6 @@ export default function RestaurantCard({
   onSaved,
   voteCount = 0,
   isWinner = false,
-  isPro = false,
-  onUpgrade,
 }) {
   const [saving, setSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(saved)
@@ -110,10 +108,6 @@ export default function RestaurantCard({
   }
 
   const handleViewMenu = async () => {
-    if (!isPro) {
-      onUpgrade?.()
-      return
-    }
     if (menuData) {
       setMenuOpen(!menuOpen)
       return
@@ -313,13 +307,8 @@ export default function RestaurantCard({
           <button
             type="button"
             onClick={handleViewMenu}
-            className={`flex-1 py-2.5 rounded-[14px] text-[12px] font-medium transition-colors border ${
-              isPro
-                ? 'border-purple-200 text-purple-700 hover:bg-purple-50'
-                : 'border-purple-200 text-purple-400 bg-purple-50/50'
-            }`}
+            className="flex-1 py-2.5 rounded-[14px] text-[12px] font-medium transition-colors border border-purple-200 text-purple-700 hover:bg-purple-50"
           >
-            {!isPro && '🔒 '}
             {menuLoading ? '...' : 'Menu'}
           </button>
           <button
