@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
-export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+module.exports = {
+  content: [
+    './app/**/*.{js,jsx}',
+    './components/**/*.{js,jsx}',
+  ],
   theme: {
     extend: {
       colors: {
@@ -15,6 +18,9 @@ export default {
         success: '#3fb950',
         'tag-bg': '#1f2937',
         'tag-text': '#d1d5db',
+      },
+      boxShadow: {
+        phone: '0 0 0 12px #1a1a2e, 0 25px 80px rgba(0,0,0,0.6)',
       },
     },
   },

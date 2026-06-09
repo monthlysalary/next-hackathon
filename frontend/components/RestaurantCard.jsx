@@ -1,5 +1,7 @@
+'use client'
+
 import { useState } from 'react'
-import { API_URL } from '../constants'
+import { API_URL } from '@/lib/constants'
 
 const DIETARY_KEYWORDS = [
   'halal',
@@ -76,75 +78,89 @@ export default function RestaurantCard({
         : 'bg-surface-raised text-text-secondary'
 
   return (
-    <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="flex items-start justify-between gap-3 mb-2">
-        <div className="flex items-center gap-2">
-          <span className="flex items-center justify-center w-7 h-7 rounded-full bg-accent text-white text-sm font-bold">
+    <div className="bg-surface border border-border rounded-2xl p-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="flex-shrink-0 w-6 h-6 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center">
             {rank}
           </span>
-          <h3 className="text-lg font-semibold text-text-primary">
+          <h3 className="text-sm font-semibold text-text-primary truncate">
             {restaurant.name}
           </h3>
         </div>
         <span
-          className={`px-2.5 py-1 rounded-full text-xs font-bold whitespace-nowrap ${scoreColor}`}
+          className={`flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${scoreColor}`}
         >
-          {restaurant.match_score}% match
+          {restaurant.match_score}%
         </span>
       </div>
 
-      <p className="text-sm text-text-secondary mb-3">
-        {restaurant.cuisine} · {restaurant.price_range} · {restaurant.area}
+      {/* Meta */}
+      <p className="text-[11px] text-text-secondary mb-2">
+        {restaurant.cuisine} · {restaurant.price_range}
       </p>
 
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {restaurant.tags?.map((tag) => (
+      {/* Tags */}
+      <div className="flex flex-wrap gap-1 mb-2.5">
+        {restaurant.tags?.slice(0, 5).map((tag) => (
           <span
             key={tag}
-            className={`px-2 py-0.5 rounded-full text-xs border ${tagColor(tag)}`}
+            className={`px-1.5 py-0.5 rounded-full text-[9px] border ${tagColor(tag)}`}
           >
             {tag}
           </span>
         ))}
+        {restaurant.tags?.length > 5 && (
+          <span className="px-1.5 py-0.5 rounded-full text-[9px] text-text-secondary">
+            +{restaurant.tags.length - 5}
+          </span>
+        )}
       </div>
 
-      <p className="text-sm text-text-primary leading-relaxed mb-3">
+      {/* Summary */}
+      <p className="text-[11px] text-text-primary leading-relaxed mb-2">
         {restaurant.summary}
       </p>
 
-      <div className="bg-surface-raised border border-border rounded-lg p-3 mb-3">
-        <p className="text-xs text-text-secondary mb-1 font-medium">
+      {/* Why this group */}
+      <div className="bg-surface-raised border border-border rounded-xl p-2.5 mb-2.5">
+        <p className="text-[9px] text-text-secondary mb-0.5 font-medium uppercase tracking-wider">
           Why your group
         </p>
-        <p className="text-sm text-text-primary">{restaurant.why_this_group}</p>
+        <p className="text-[11px] text-text-primary leading-relaxed">
+          {restaurant.why_this_group}
+        </p>
       </div>
 
+      {/* Deal */}
       {restaurant.deal && (
-        <div className="bg-accent/10 border border-accent/30 rounded-lg px-3 py-2 mb-3 text-sm text-accent">
+        <div className="bg-accent/10 border border-accent/30 rounded-xl px-2.5 py-1.5 mb-2.5 text-[11px] text-accent">
           🏷️ {restaurant.deal}
         </div>
       )}
 
+      {/* Actions */}
       <div className="flex gap-2">
         <a
           href={restaurant.maps_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 text-center py-2 rounded-lg border border-border text-sm text-text-primary hover:border-accent hover:text-accent transition-colors"
+          className="flex-1 text-center py-2 rounded-xl border border-border text-[11px] text-text-primary hover:border-accent hover:text-accent transition-colors"
         >
-          View on Maps
+          Maps
         </a>
         <button
           type="button"
           onClick={handleSave}
           disabled={isSaved || saving}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`flex-1 py-2 rounded-xl text-[11px] font-medium transition-colors ${
             isSaved
               ? 'bg-success/20 text-success border border-success/30'
               : 'bg-accent hover:bg-accent-hover text-white'
           }`}
         >
-          {isSaved ? 'Saved ✓' : saving ? 'Saving...' : 'Save'}
+          {isSaved ? 'Saved ✓' : saving ? '...' : 'Save'}
         </button>
       </div>
     </div>
