@@ -168,6 +168,8 @@ def search_restaurants(area: str, dietary: list[str], meal_type: str = "") -> li
         meal_hint = "lunch set meal"
     elif meal_type in ("dinner",):
         meal_hint = "dinner restaurant"
+    elif meal_type in ("dessert",):
+        meal_hint = "dessert cafe bakery ice cream waffles"
 
     query = f"{area} Singapore {meal_hint} restaurant {dietary_str} recommended 2024 2025"
     kwargs = {

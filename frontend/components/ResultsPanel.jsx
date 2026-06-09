@@ -17,8 +17,6 @@ export default function ResultsPanel({
   voterName,
   setVoterName,
   onVote,
-  isPro,
-  onUpgrade,
 }) {
   const [showMap, setShowMap] = useState(false)
   const [refineInput, setRefineInput] = useState('')
@@ -224,8 +222,6 @@ export default function ResultsPanel({
               isWinner={
                 (votes[r.name] || []).length === maxVotes && maxVotes > 0
               }
-              isPro={isPro}
-              onUpgrade={onUpgrade}
             />
           ))}
         </div>

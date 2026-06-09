@@ -13,6 +13,8 @@ import backend.aws_config  # noqa: E402 — patches SSL early
 from backend import agent, dynamo, exa_search, location
 from backend.models import (
     AgentResponse,
+    CancelProRequest,
+    ConfirmProRequest,
     GpsRequest,
     GroupRequest,
     RefineRequest,
@@ -43,12 +45,28 @@ def health():
     return {"status": "ok"}
 
 
+FREE_MAX_PERSONS = 5
+PRO_MAX_PERSONS = 20
+
+
 @app.post("/find", response_model=AgentResponse)
 async def find_restaurants(request: GroupRequest):
+    max_persons = PRO_MAX_PERSONS if request.is_pro else FREE_MAX_PERSONS
     if len(request.persons) < 2:
         raise HTTPException(status_code=400, detail="At least 2 persons required")
-    if len(request.persons) > 6:
-        raise HTTPException(status_code=400, detail="Maximum 6 persons allowed")
+    if len(request.persons) > max_persons:
+        if request.is_pro:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Maximum {PRO_MAX_PERSONS} persons allowed",
+            )
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"Free plan supports up to {FREE_MAX_PERSONS} people. "
+                "Go Pro for unlimited group size."
+            ),
+        )
     return await agent.run_agent(request)
 
 
@@ -123,32 +141,11 @@ def gps_area(body: GpsRequest):
     return {"area": area}
 
 
-@app.get("/menu/{restaurant_name}")
-def get_menu(restaurant_name: str):
-    """Search for a restaurant's menu (Pro feature)."""
-    menu_data = exa_search.search_menu(restaurant_name)
-    if not menu_data:
-        menu_data = {
-            "restaurant_name": restaurant_name,
-            "menu_items": [
-                f"Popular dishes at {restaurant_name}:",
-                "Set Lunch A — S$12.90",
-                "Set Lunch B — S$14.90",
-                "Signature Main Course — S$16.90",
-                "Appetizer Platter — S$8.90",
-                "Soup of the Day — S$5.50",
-                "Dessert — S$6.90",
-                "Drinks from S$2.50",
-            ],
-            "source_url": f"https://www.google.com/search?q={restaurant_name.replace(' ', '+')}+Singapore+menu",
-            "note": "Estimated prices. Tap the link below for the latest menu.",
-        }
-    return menu_data
-
-
 @app.post("/create-checkout")
 def create_checkout():
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    demo_mode = os.getenv("STRIPE_DEMO_FREE", "true").lower() in ("1", "true", "yes")
+    unit_amount = 0 if demo_mode else int(os.getenv("STRIPE_PRO_PRICE_CENTS", "499"))
 
     if not stripe.api_key:
         raise HTTPException(
@@ -164,21 +161,63 @@ def create_checkout():
                     "price_data": {
                         "currency": "sgd",
                         "product_data": {
-                            "name": (
-                                "TableFor Pro — unlimited saves "
-                                "+ priority recommendations"
+                            "name": "TableFor Pro",
+                            "description": (
+                                "Unlimited group size · unlimited daily searches"
+                                + (" · Demo $0.00/month" if demo_mode else "")
                             ),
                         },
-                        "unit_amount": 499,
+                        "unit_amount": unit_amount,
                         "recurring": {"interval": "month"},
                     },
                     "quantity": 1,
                 }
             ],
             mode="subscription",
-            success_url=f"{frontend_url}?upgraded=true",
+            success_url=(
+                f"{frontend_url}?upgraded=true"
+                "&checkout_session_id={CHECKOUT_SESSION_ID}"
+            ),
             cancel_url=frontend_url,
         )
-        return {"url": session.url}
+        return {"url": session.url, "demo": demo_mode, "amount": unit_amount}
     except stripe.StripeError as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/confirm-pro")
+def confirm_pro(body: ConfirmProRequest):
+    """Verify Stripe checkout and return subscription id after Go Pro."""
+    if not stripe.api_key:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+
+    try:
+        session = stripe.checkout.Session.retrieve(body.checkout_session_id)
+    except stripe.StripeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if session.payment_status not in ("paid", "no_payment_required"):
+        raise HTTPException(status_code=400, detail="Checkout not completed")
+
+    subscription_id = session.subscription
+    if isinstance(subscription_id, dict):
+        subscription_id = subscription_id.get("id")
+
+    return {
+        "status": "active",
+        "subscription_id": subscription_id,
+    }
+
+
+@app.post("/cancel-pro")
+def cancel_pro(body: CancelProRequest):
+    """Cancel TableFor Pro — cancels Stripe subscription when present."""
+    if body.subscription_id and stripe.api_key:
+        try:
+            stripe.Subscription.cancel(body.subscription_id)
+        except stripe.StripeError as e:
+            code = getattr(e, "code", "") or ""
+            if code not in ("resource_missing",):
+                raise HTTPException(status_code=500, detail=str(e))
+
+    return {"status": "cancelled"}

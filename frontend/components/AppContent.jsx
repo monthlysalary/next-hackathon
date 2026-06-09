@@ -11,10 +11,19 @@ import {
   DEMO_PERSONS,
   DEMO_RESULT,
 } from '@/lib/constants'
-import { fetchUserSessions, saveUserSession } from '@/lib/userDb'
+import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro } from '@/lib/userDb'
+import {
+  FREE_MAX_PERSONS,
+  PRO_MAX_PERSONS,
+  FREE_DAILY_SESSIONS,
+  getAnonymousDailySearchCount,
+  incrementAnonymousDailySearchCount,
+} from '@/lib/planLimits'
 
 const SESSION_KEY = 'tablefor_session_id'
 const VOTER_KEY = 'tablefor_voter_name'
+const PRO_KEY = 'tablefor_pro'
+const SUBSCRIPTION_KEY = 'tablefor_subscription_id'
 
 const DIETARY_MAP = {
   Halal: 'halal',
@@ -37,7 +46,7 @@ const MUST_HAVE_MAP = {
 }
 
 export default function AppContent() {
-  const { user, profile, signOut, configured: authConfigured } = useAuth()
+  const { user, profile, signOut, configured: authConfigured, refreshProfile } = useAuth()
   const [view, setView] = useState('setup')
   const [groupName, setGroupName] = useState('Our Group')
   const [mealType, setMealType] = useState('dinner')
@@ -54,51 +63,117 @@ export default function AppContent() {
   const [hasSavedSession, setHasSavedSession] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
   const [userSessions, setUserSessions] = useState([])
+  const [loadingSessionId, setLoadingSessionId] = useState(null)
   const [voterName, setVoterName] = useState('')
   const [votes, setVotes] = useState({})
   const [voters, setVoters] = useState([])
 
+  const applySessionPayload = (data) => {
+    setResult({
+      session_id: data.session_id,
+      suggested_area: data.suggested_area,
+      area_reason: data.area_reason,
+      travel_summary: data.travel_summary,
+      restaurants: data.restaurants,
+      warning: data.warning,
+    })
+    if (data.persons) setPersons(data.persons)
+    if (data.group_name) setGroupName(data.group_name)
+    if (data.meal_type) setMealType(data.meal_type)
+    if (data.day) setDay(data.day)
+    setSavedRestaurants(
+      (data.saved_restaurants || []).map((r) => r.name || r),
+    )
+    setVotes(data.votes || {})
+    setVoters(data.voters || [])
+    localStorage.setItem(SESSION_KEY, data.session_id)
+    setHasSavedSession(true)
+    setView('results')
+  }
+
   const loadSession = async (sessionId) => {
+    setLoadingSessionId(sessionId)
+    setError(null)
     try {
       const res = await fetch(`${API_URL}/session/${sessionId}`)
-      if (!res.ok) return
-      const data = await res.json()
-      setResult({
-        session_id: data.session_id,
-        suggested_area: data.suggested_area,
-        area_reason: data.area_reason,
-        travel_summary: data.travel_summary,
-        restaurants: data.restaurants,
-      })
-      if (data.persons) setPersons(data.persons)
-      if (data.group_name) setGroupName(data.group_name)
-      if (data.meal_type) setMealType(data.meal_type)
-      if (data.day) setDay(data.day)
-      setSavedRestaurants(
-        (data.saved_restaurants || []).map((r) => r.name || r),
-      )
-      setVotes(data.votes || {})
-      setVoters(data.voters || [])
-      localStorage.setItem(SESSION_KEY, sessionId)
-      setView('results')
-    } catch {
-      /* ignore */
+      if (res.ok) {
+        applySessionPayload(await res.json())
+        return
+      }
+
+      if (user) {
+        const cached = await fetchUserSessionData(user.id, sessionId)
+        if (cached) {
+          applySessionPayload(cached)
+          return
+        }
+      }
+
+      const cachedLocal = userSessions.find((s) => s.session_id === sessionId)
+      if (cachedLocal?.session_data) {
+        applySessionPayload(cachedLocal.session_data)
+        return
+      }
+
+      throw new Error('Session expired or not found. Run a new search to save fresh results.')
+    } catch (e) {
+      setError(e.message || 'Could not load session')
+    } finally {
+      setLoadingSessionId(null)
     }
   }
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.get('upgraded') === 'true') {
+    const checkoutSessionId = params.get('checkout_session_id')
+
+    const activatePro = async (subscriptionId = null) => {
       setIsPro(true)
-      localStorage.setItem('tablefor_pro', 'true')
-    } else if (localStorage.getItem('tablefor_pro') === 'true') {
-      setIsPro(true)
+      localStorage.setItem(PRO_KEY, 'true')
+      if (subscriptionId) {
+        localStorage.setItem(SUBSCRIPTION_KEY, subscriptionId)
+      }
+      if (user) {
+        await setUserPro(user.id, true, subscriptionId)
+        refreshProfile()
+      }
     }
 
-    // Restore voter name
+    if (params.get('upgraded') === 'true') {
+      ;(async () => {
+        let subscriptionId = localStorage.getItem(SUBSCRIPTION_KEY)
+
+        if (checkoutSessionId) {
+          try {
+            const res = await fetch(`${API_URL}/confirm-pro`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ checkout_session_id: checkoutSessionId }),
+            })
+            if (res.ok) {
+              const data = await res.json()
+              if (data.subscription_id) {
+                subscriptionId = data.subscription_id
+              }
+            }
+          } catch {
+            /* still activate locally */
+          }
+        }
+
+        await activatePro(subscriptionId)
+        window.history.replaceState({}, '', window.location.pathname)
+      })()
+    } else if (localStorage.getItem(PRO_KEY) === 'true') {
+      setIsPro(true)
+    }
+  }, [user, refreshProfile])
+
+  useEffect(() => {
     const savedVoter = localStorage.getItem(VOTER_KEY)
     if (savedVoter) setVoterName(savedVoter)
 
+    const params = new URLSearchParams(window.location.search)
     const sessionId =
       params.get('session') || localStorage.getItem(SESSION_KEY)
     if (sessionId) {
@@ -120,9 +195,19 @@ export default function AppContent() {
   useEffect(() => {
     if (profile?.is_pro) {
       setIsPro(true)
-      localStorage.setItem('tablefor_pro', 'true')
+      localStorage.setItem(PRO_KEY, 'true')
+      if (profile.stripe_subscription_id) {
+        localStorage.setItem(SUBSCRIPTION_KEY, profile.stripe_subscription_id)
+      }
     }
   }, [profile])
+
+  useEffect(() => {
+    if (user && localStorage.getItem(PRO_KEY) === 'true' && !profile?.is_pro) {
+      const subId = localStorage.getItem(SUBSCRIPTION_KEY)
+      setUserPro(user.id, true, subId || null)
+    }
+  }, [user, profile?.is_pro])
 
   // Poll votes every 5 seconds when on results view
   useEffect(() => {
@@ -147,40 +232,70 @@ export default function AppContent() {
     return () => clearInterval(interval)
   }, [view, result?.session_id])
 
-  const persistSessionForUser = async (data) => {
+  const persistSessionForUser = async (data, personsPayload) => {
     if (!user || !data?.session_id) return
+    const sessionData = {
+      session_id: data.session_id,
+      suggested_area: data.suggested_area,
+      area_reason: data.area_reason,
+      travel_summary: data.travel_summary,
+      restaurants: data.restaurants,
+      warning: data.warning,
+      group_name: groupName,
+      meal_type: mealType,
+      day,
+      persons: personsPayload,
+      saved_restaurants: [],
+      votes: {},
+      voters: [],
+    }
     await saveUserSession(user.id, {
       session_id: data.session_id,
-      group_name: data.group_name || groupName,
+      group_name: groupName,
       suggested_area: data.suggested_area,
+      session_data: sessionData,
     })
     const sessions = await fetchUserSessions(user.id)
     setUserSessions(sessions)
-  }
-
-  const handleContinueSession = () => {
-    const sessionId = localStorage.getItem(SESSION_KEY)
-    if (sessionId) loadSession(sessionId)
   }
 
   const handleFind = async () => {
     setLoading(true)
     setError(null)
     try {
+      if (!isPro) {
+        const dailyCount = user
+          ? await countUserSessionsToday(user.id)
+          : getAnonymousDailySearchCount()
+        if (dailyCount >= FREE_DAILY_SESSIONS) {
+          throw new Error(
+            'Free plan: 1 search per day. Go Pro for unlimited searches.',
+          )
+        }
+        if (persons.length > FREE_MAX_PERSONS) {
+          throw new Error(
+            `Free plan: up to ${FREE_MAX_PERSONS} people. Go Pro for larger groups.`,
+          )
+        }
+      }
+
+      const personsPayload = persons.map((p) => ({
+        ...p,
+        dietary: p.dietary.map((d) => DIETARY_MAP[d] || d.toLowerCase()),
+        cuisine_loves: p.cuisine_loves,
+        must_have: p.must_have.map((m) => MUST_HAVE_MAP[m] || m.toLowerCase()),
+        avoid: (p.avoid || []).map((a) => a.toLowerCase()),
+      }))
+
       const res = await fetch(`${API_URL}/find`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           group_name: groupName,
-          persons: persons.map((p) => ({
-            ...p,
-            dietary: p.dietary.map((d) => DIETARY_MAP[d] || d.toLowerCase()),
-            cuisine_loves: p.cuisine_loves,
-            must_have: p.must_have.map((m) => MUST_HAVE_MAP[m] || m.toLowerCase()),
-            avoid: (p.avoid || []).map((a) => a.toLowerCase()),
-          })),
+          persons: personsPayload,
           meal_type: mealType,
           day: day,
+          is_pro: isPro,
         }),
       })
       if (!res.ok) {
@@ -195,7 +310,10 @@ export default function AppContent() {
       localStorage.setItem(SESSION_KEY, data.session_id)
       setHasSavedSession(true)
       setSavedRestaurants([])
-      await persistSessionForUser(data)
+      if (!user) {
+        incrementAnonymousDailySearchCount()
+      }
+      await persistSessionForUser(data, personsPayload)
       setVotes({})
       setVoters([])
       setView('results')
@@ -293,20 +411,63 @@ export default function AppContent() {
     setError(null)
   }
 
+  const handleContinueSession = () => {
+    const sessionId = localStorage.getItem(SESSION_KEY)
+    if (sessionId) loadSession(sessionId)
+  }
+
   const handleUpgrade = async () => {
     try {
       const res = await fetch(`${API_URL}/create-checkout`, { method: 'POST' })
-      if (!res.ok) throw new Error('Checkout failed')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || 'Checkout failed')
+      }
       const data = await res.json()
       if (data.url) {
         window.location.href = data.url
         return
       }
-    } catch {
-      // Stripe unavailable (SSL/network issue) — activate Pro locally for demo
-      setIsPro(true)
-      localStorage.setItem('tablefor_pro', 'true')
-      setError(null)
+      throw new Error('No checkout URL returned')
+    } catch (e) {
+      setError(e.message || 'Could not start checkout. Is Stripe configured?')
+    }
+  }
+
+  const handleCancelPro = async () => {
+    if (!window.confirm('Cancel TableFor Pro? You will return to the free plan.')) {
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    try {
+      const subscriptionId =
+        localStorage.getItem(SUBSCRIPTION_KEY) ||
+        profile?.stripe_subscription_id ||
+        null
+
+      const res = await fetch(`${API_URL}/cancel-pro`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription_id: subscriptionId }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || 'Could not cancel subscription')
+      }
+
+      setIsPro(false)
+      localStorage.removeItem(PRO_KEY)
+      localStorage.removeItem(SUBSCRIPTION_KEY)
+      if (user) {
+        await setUserPro(user.id, false)
+        refreshProfile()
+      }
+    } catch (e) {
+      setError(e.message || 'Could not cancel Pro')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -357,6 +518,16 @@ export default function AppContent() {
                 Go Pro
               </button>
             )}
+            {isPro && (
+              <button
+                type="button"
+                onClick={handleCancelPro}
+                disabled={loading}
+                className="px-2.5 py-1 text-[10px] font-medium border border-border rounded-full text-text-secondary hover:text-red-600 hover:border-red-200 transition-colors disabled:opacity-50"
+              >
+                Cancel Pro
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -393,8 +564,12 @@ export default function AppContent() {
           hasSavedSession={hasSavedSession}
           userSessions={userSessions}
           onLoadUserSession={loadSession}
+          loadingSessionId={loadingSessionId}
           isSignedIn={Boolean(user)}
           onSignIn={() => setAuthOpen(true)}
+          isPro={isPro}
+          onUpgrade={handleUpgrade}
+          maxPersons={isPro ? PRO_MAX_PERSONS : FREE_MAX_PERSONS}
         />
       ) : (
         <ResultsPanel
@@ -410,8 +585,6 @@ export default function AppContent() {
           voterName={voterName}
           setVoterName={setVoterName}
           onVote={handleVote}
-          isPro={isPro}
-          onUpgrade={handleUpgrade}
         />
       )}
     </div>

@@ -79,15 +79,10 @@ export default function RestaurantCard({
   onSaved,
   voteCount = 0,
   isWinner = false,
-  isPro = false,
-  onUpgrade,
 }) {
   const [saving, setSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(saved)
   const [imgError, setImgError] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [menuData, setMenuData] = useState(null)
-  const [menuLoading, setMenuLoading] = useState(false)
 
   // Determine best image: use photo_url if provided, otherwise cuisine-based Unsplash image
   const imageUrl = (restaurant.photo_url && !imgError)
@@ -106,98 +101,6 @@ export default function RestaurantCard({
       onSaved?.(restaurant.name)
     } catch { /* ignore */ } finally {
       setSaving(false)
-    }
-  }
-
-  const handleViewMenu = async () => {
-    if (!isPro) {
-      onUpgrade?.()
-      return
-    }
-    if (menuData) {
-      setMenuOpen(!menuOpen)
-      return
-    }
-
-    // Hardcoded menus for demo restaurants (works offline)
-    const DEMO_MENUS = {
-      'Hjh Maimunah Restaurant': {
-        restaurant_name: 'Hjh Maimunah Restaurant',
-        menu_items: [
-          'Nasi Padang (rice + 2 dishes) — S$6.50',
-          'Beef Rendang — S$6.00',
-          'Ayam Goreng Berempah — S$5.50',
-          'Sambal Goreng Pengantin — S$5.00',
-          'Sayur Lodeh (vegetable curry) — S$3.50',
-          'Ikan Bakar (grilled fish) — S$7.00',
-          'Lontong — S$5.50',
-          'Tahu Goreng — S$3.00',
-          'Mee Rebus — S$5.00',
-          'Kueh Lapis — S$2.50',
-        ],
-        source_url: 'https://www.google.com/maps/place/Hjh+Maimunah',
-        note: 'Prices as of 2025. Subject to change.',
-      },
-      'Komala Vilas': {
-        restaurant_name: 'Komala Vilas',
-        menu_items: [
-          'Masala Thosai — S$5.50',
-          'Plain Thosai — S$3.50',
-          'Banana Leaf Rice (weekday lunch) — S$8.90',
-          'Vegetable Biryani — S$7.50',
-          'Idli (3 pcs) — S$4.00',
-          'Vadai (2 pcs) — S$3.50',
-          'Puri Set — S$5.50',
-          'Chappathi Set — S$6.00',
-          'Mango Lassi — S$3.50',
-          'Filter Coffee — S$2.00',
-        ],
-        source_url: 'https://www.google.com/maps/place/Komala+Vilas',
-        note: 'Prices as of 2025. 10% off with student ID.',
-      },
-      'Bishan North Food Centre': {
-        restaurant_name: 'Bishan North Food Centre',
-        menu_items: [
-          'Chicken Rice — S$3.50–4.50',
-          'Nasi Lemak — S$3.00–5.00',
-          'Wanton Mee — S$4.00',
-          'Roti Prata (plain) — S$1.50',
-          'Fish Soup Bee Hoon — S$5.00',
-          'Yong Tau Foo (5 pcs) — S$4.50',
-          'Mee Goreng — S$4.00',
-          'Ice Kachang — S$2.50',
-          'Teh Tarik — S$1.50',
-          'Bandung — S$1.50',
-        ],
-        source_url: 'https://www.google.com/maps/place/Bishan+North+Food+Centre',
-        note: 'Prices vary by stall. Hawker centre with 40+ stalls.',
-      },
-    }
-
-    const demoMenu = DEMO_MENUS[restaurant.name]
-    if (demoMenu) {
-      setMenuData(demoMenu)
-      setMenuOpen(true)
-      return
-    }
-
-    // Real API call for non-demo restaurants
-    setMenuLoading(true)
-    setMenuOpen(true)
-    try {
-      const res = await fetch(
-        `${API_URL}/menu/${encodeURIComponent(restaurant.name)}`,
-      )
-      if (res.ok) {
-        const data = await res.json()
-        setMenuData(data)
-      } else {
-        setMenuData({ menu_items: ['Menu not available for this restaurant.'], note: '' })
-      }
-    } catch {
-      setMenuData({ menu_items: ['Failed to load menu. Try again later.'], note: '' })
-    } finally {
-      setMenuLoading(false)
     }
   }
 
@@ -312,18 +215,6 @@ export default function RestaurantCard({
           </a>
           <button
             type="button"
-            onClick={handleViewMenu}
-            className={`flex-1 py-2.5 rounded-[14px] text-[12px] font-medium transition-colors border ${
-              isPro
-                ? 'border-purple-200 text-purple-700 hover:bg-purple-50'
-                : 'border-purple-200 text-purple-400 bg-purple-50/50'
-            }`}
-          >
-            {!isPro && '🔒 '}
-            {menuLoading ? '...' : 'Menu'}
-          </button>
-          <button
-            type="button"
             onClick={handleSave}
             disabled={isSaved || saving}
             className={`flex-1 py-2.5 rounded-[14px] text-[12px] font-medium transition-colors ${
@@ -335,50 +226,6 @@ export default function RestaurantCard({
             {isSaved ? 'Saved ✓' : saving ? '...' : 'Save'}
           </button>
         </div>
-
-        {/* Menu panel (Pro feature) */}
-        {menuOpen && (
-          <div className="mt-3 bg-purple-50 border border-purple-200 rounded-[14px] p-3">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider">
-                📋 Menu
-              </h4>
-              <button
-                type="button"
-                onClick={() => setMenuOpen(false)}
-                className="text-[10px] text-purple-400 hover:text-purple-600"
-              >
-                ✕
-              </button>
-            </div>
-            {menuLoading ? (
-              <p className="text-[11px] text-purple-500 animate-pulse">Loading menu...</p>
-            ) : menuData ? (
-              <>
-                <ul className="space-y-1 mb-2">
-                  {menuData.menu_items.map((item, i) => (
-                    <li key={i} className="text-[11px] text-text-primary leading-relaxed">
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                {menuData.note && (
-                  <p className="text-[10px] text-purple-500 italic">{menuData.note}</p>
-                )}
-                {menuData.source_url && (
-                  <a
-                    href={menuData.source_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] text-purple-600 hover:underline mt-1 inline-block"
-                  >
-                    View full menu →
-                  </a>
-                )}
-              </>
-            ) : null}
-          </div>
-        )}
       </div>
     </div>
   )
