@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
   API_URL,
   SINGAPORE_AREAS,
@@ -51,45 +51,60 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
   const [locationError, setLocationError] = useState(null)
   const [gpsLoading, setGpsLoading] = useState(false)
   const [expanded, setExpanded] = useState(index < 2)
+  const debounceRef = useRef(null)
 
   const update = (field, value) => {
     onChange(index, { ...person, [field]: value })
   }
 
-  const handleLocationInput = async (value) => {
-    update('location', value)
-    if (value.length >= 2) {
-      // Try backend validation for fuzzy matching
-      try {
-        const res = await fetch(
-          `${API_URL}/validate-location/${encodeURIComponent(value)}`,
-        )
-        if (res.ok) {
-          const data = await res.json()
-          if (data.valid) {
-            setSuggestions([data.area])
-            setLocationError(null)
-          } else if (data.suggestions.length > 0) {
-            setSuggestions(data.suggestions)
-            setLocationError(data.message)
-          } else {
-            // Fall back to local filter
-            const filtered = SINGAPORE_AREAS.filter((a) =>
-              a.toLowerCase().includes(value.toLowerCase()),
-            )
-            setSuggestions(filtered.slice(0, 4))
-            setLocationError(filtered.length === 0 ? data.message : null)
-          }
-          return
+  const validateLocation = useCallback(async (value) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/validate-location/${encodeURIComponent(value)}`,
+      )
+      if (res.ok) {
+        const data = await res.json()
+        if (data.valid) {
+          setSuggestions([data.area])
+          setLocationError(null)
+        } else if (data.suggestions.length > 0) {
+          setSuggestions(data.suggestions)
+          setLocationError(data.message)
+        } else {
+          const filtered = SINGAPORE_AREAS.filter((a) =>
+            a.toLowerCase().includes(value.toLowerCase()),
+          )
+          setSuggestions(filtered.slice(0, 4))
+          setLocationError(filtered.length === 0 ? data.message : null)
         }
-      } catch {
-        // Backend unavailable — fall back to local filter
+        return
       }
+    } catch {
+      // Backend unavailable — fall back to local filter
+    }
+    const filtered = SINGAPORE_AREAS.filter((a) =>
+      a.toLowerCase().includes(value.toLowerCase()),
+    )
+    setSuggestions(filtered.slice(0, 4))
+    setLocationError(null)
+  }, [])
+
+  const handleLocationInput = (value) => {
+    update('location', value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    if (value.length >= 2) {
+      // Local filter immediately for snappy UX
       const filtered = SINGAPORE_AREAS.filter((a) =>
         a.toLowerCase().includes(value.toLowerCase()),
       )
       setSuggestions(filtered.slice(0, 4))
       setLocationError(null)
+
+      // Debounced backend call for fuzzy matching
+      debounceRef.current = setTimeout(() => {
+        validateLocation(value)
+      }, 300)
     } else {
       setSuggestions([])
       setLocationError(null)
