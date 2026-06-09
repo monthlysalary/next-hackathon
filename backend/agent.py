@@ -66,6 +66,14 @@ GEOGRAPHIC MIDPOINT AREA: {midpoint_area}
 MEAL TYPE: {request.meal_type}
 DAY: {request.day}
 
+IMPORTANT — MEAL TYPE CONTEXT:
+- If meal type is "lunch" or "dinner": recommend proper sit-down restaurants
+  with full meals (rice, mains, sides).
+- If meal type is "supper": recommend late-night options, supper spots,
+  24-hour eateries, or places open past 10 PM.
+- If meal type is "snack" or "any": include cafés, dessert spots, hawker
+  snack stalls, or lighter options alongside restaurants.
+
 RESTAURANT SEARCH RESULTS:
 {_format_exa_results(exa_results)}
 
@@ -152,6 +160,14 @@ GROUP PROFILES:
 
 MEAL TYPE: {session_data.get('meal_type', 'dinner')}
 DAY: {session_data.get('day', 'today')}
+
+IMPORTANT — MEAL TYPE CONTEXT:
+- If meal type is "lunch" or "dinner": recommend proper sit-down restaurants
+  with full meals (rice, mains, sides).
+- If meal type is "supper": recommend late-night options, supper spots,
+  24-hour eateries, or places open past 10 PM.
+- If meal type is "snack" or "any": include cafés, dessert spots, hawker
+  snack stalls, or lighter options alongside restaurants.
 
 USER'S ADJUSTMENT REQUEST: "{user_message}"
 
@@ -430,7 +446,7 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
             if d.lower() != "none" and d not in combined_dietary:
                 combined_dietary.append(d)
 
-    exa_results = exa_search.search_restaurants(midpoint_area, combined_dietary)
+    exa_results = exa_search.search_restaurants(midpoint_area, combined_dietary, request.meal_type)
 
     prompt = _build_prompt(request, midpoint_area, exa_results)
 

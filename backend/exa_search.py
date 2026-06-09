@@ -155,9 +155,21 @@ def _dedupe_results(results: list[dict]) -> list[dict]:
     return deduped
 
 
-def search_restaurants(area: str, dietary: list[str]) -> list[dict]:
+def search_restaurants(area: str, dietary: list[str], meal_type: str = "") -> list[dict]:
     dietary_str = " ".join(d for d in dietary if d and d.lower() != "none")
-    query = f"{area} Singapore restaurant {dietary_str} recommended 2024 2025"
+
+    # Tailor search query to meal type
+    meal_hint = ""
+    if meal_type in ("supper",):
+        meal_hint = "supper late night 24 hours"
+    elif meal_type in ("snack", "any"):
+        meal_hint = "cafe snack dessert"
+    elif meal_type in ("lunch",):
+        meal_hint = "lunch set meal"
+    elif meal_type in ("dinner",):
+        meal_hint = "dinner restaurant"
+
+    query = f"{area} Singapore {meal_hint} restaurant {dietary_str} recommended 2024 2025"
     kwargs = {
         "num_results": 6,
         "include_domains": RESTAURANT_DOMAINS,

@@ -20,8 +20,6 @@ from backend.models import (
     VoteStatus,
 )
 
-load_dotenv()
-
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 
 app = FastAPI(title="TableFor API", version="1.0.0")
@@ -29,8 +27,6 @@ app = FastAPI(title="TableFor API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https://.*\.vercel\.app|http://(localhost|127\.0\.0\.1):\d+",
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
-    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
@@ -132,7 +128,6 @@ def get_menu(restaurant_name: str):
     """Search for a restaurant's menu (Pro feature)."""
     menu_data = exa_search.search_menu(restaurant_name)
     if not menu_data:
-        # Fallback: return a generic menu structure so the feature always works
         menu_data = {
             "restaurant_name": restaurant_name,
             "menu_items": [

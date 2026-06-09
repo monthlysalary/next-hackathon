@@ -54,54 +54,9 @@ export default function AppContent() {
   const [hasSavedSession, setHasSavedSession] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
   const [userSessions, setUserSessions] = useState([])
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('upgraded') === 'true') {
-      setIsPro(true)
-      localStorage.setItem('tablefor_pro', 'true')
-    } else if (localStorage.getItem('tablefor_pro') === 'true') {
-      setIsPro(true)
-    }
-
-    const sessionId =
-      params.get('session') || localStorage.getItem(SESSION_KEY)
-    if (sessionId) {
-      setHasSavedSession(true)
-      if (params.get('session')) {
-        loadSession(sessionId)
-      }
-    }
-  }, [])
   const [voterName, setVoterName] = useState('')
   const [votes, setVotes] = useState({})
   const [voters, setVoters] = useState([])
-
-  useEffect(() => {
-    if (!user) {
-      setUserSessions([])
-      return
-    }
-    fetchUserSessions(user.id).then(setUserSessions)
-  }, [user])
-
-  useEffect(() => {
-    if (profile?.is_pro) {
-      setIsPro(true)
-      localStorage.setItem('tablefor_pro', 'true')
-    }
-  }, [profile])
-
-  const persistSessionForUser = async (data) => {
-    if (!user || !data?.session_id) return
-    await saveUserSession(user.id, {
-      session_id: data.session_id,
-      group_name: data.group_name || groupName,
-      suggested_area: data.suggested_area,
-    })
-    const sessions = await fetchUserSessions(user.id)
-    setUserSessions(sessions)
-  }
 
   const loadSession = async (sessionId) => {
     try {
@@ -154,6 +109,21 @@ export default function AppContent() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!user) {
+      setUserSessions([])
+      return
+    }
+    fetchUserSessions(user.id).then(setUserSessions)
+  }, [user])
+
+  useEffect(() => {
+    if (profile?.is_pro) {
+      setIsPro(true)
+      localStorage.setItem('tablefor_pro', 'true')
+    }
+  }, [profile])
+
   // Poll votes every 5 seconds when on results view
   useEffect(() => {
     if (view !== 'results' || !result?.session_id) return
@@ -176,6 +146,17 @@ export default function AppContent() {
     const interval = setInterval(poll, 5000)
     return () => clearInterval(interval)
   }, [view, result?.session_id])
+
+  const persistSessionForUser = async (data) => {
+    if (!user || !data?.session_id) return
+    await saveUserSession(user.id, {
+      session_id: data.session_id,
+      group_name: data.group_name || groupName,
+      suggested_area: data.suggested_area,
+    })
+    const sessions = await fetchUserSessions(user.id)
+    setUserSessions(sessions)
+  }
 
   const handleContinueSession = () => {
     const sessionId = localStorage.getItem(SESSION_KEY)
