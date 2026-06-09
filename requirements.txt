@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+boto3
+exa-py
+httpx
+python-dotenv
+pydantic
+mangum
+stripe
