@@ -107,7 +107,6 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
       }, 300)
     } else {
       setSuggestions([])
-      setLocationError(null)
     }
   }
 
