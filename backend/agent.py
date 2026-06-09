@@ -7,7 +7,7 @@ import boto3
 from botocore.exceptions import ClientError
 
 from backend import dynamo, exa_search, location
-from backend.aws_config import REGION
+from backend.aws_config import REGION, VERIFY_SSL
 from backend.models import AgentResponse, GroupRequest, RefineRequest, RestaurantResult
 
 # Tried in order until one works. Claude 4.x Sonnet is the sweet spot for this agent.
@@ -215,7 +215,7 @@ def _bedrock_model_ids() -> list[str]:
 
 
 def _call_bedrock(prompt: str) -> str:
-    client = boto3.client("bedrock-runtime", region_name=REGION)
+    client = boto3.client("bedrock-runtime", region_name=REGION, verify=VERIFY_SSL)
     errors: list[str] = []
 
     for model_id in _bedrock_model_ids():
@@ -434,18 +434,32 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
 
     prompt = _build_prompt(request, midpoint_area, exa_results)
 
+    warning = None
     try:
         text = _call_bedrock(prompt)
         parsed = _parse_agent_response(text)
-    except Exception as e:
+    except RuntimeError as e:
         print(f"Bedrock unavailable, using fallback: {e}")
         parsed = _fallback_response(request, midpoint_area)
+        warning = (
+            "AI recommendations unavailable — showing generic suggestions. "
+            "Reason: " + str(e)
+        )
+    except Exception as e:
+        print(f"Bedrock error, using fallback: {e}")
+        parsed = _fallback_response(request, midpoint_area)
+        warning = (
+            "AI recommendations unavailable — showing generic suggestions. "
+            f"Error: {type(e).__name__}: {e}"
+        )
 
     # Enrich with photos, hours, deals
     _enrich_restaurants(parsed)
 
     if not parsed.get("restaurants"):
         parsed = _fallback_response(request, midpoint_area)
+        if not warning:
+            warning = "AI returned no results — showing generic suggestions."
 
     session_id = request.session_id or str(uuid.uuid4())
     restaurants = _build_restaurants(parsed, midpoint_area)
@@ -456,6 +470,7 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
         area_reason=parsed.get("area_reason", ""),
         travel_summary=parsed.get("travel_summary", {}),
         restaurants=restaurants,
+        warning=warning,
     )
 
     dynamo.save_session(
@@ -515,18 +530,32 @@ async def refine_results(refine_request: RefineRequest) -> AgentResponse:
 
     prompt = _build_refine_prompt(session, refine_request.message, exa_results)
 
+    warning = None
     try:
         text = _call_bedrock(prompt)
         parsed = _parse_agent_response(text)
-    except Exception as e:
+    except RuntimeError as e:
         print(f"Bedrock unavailable for refine, using fallback: {e}")
         parsed = _fallback_response(session, midpoint_area)
+        warning = (
+            "AI recommendations unavailable — showing generic suggestions. "
+            "Reason: " + str(e)
+        )
+    except Exception as e:
+        print(f"Bedrock error for refine, using fallback: {e}")
+        parsed = _fallback_response(session, midpoint_area)
+        warning = (
+            "AI recommendations unavailable — showing generic suggestions. "
+            f"Error: {type(e).__name__}: {e}"
+        )
 
     # Enrich with photos, hours, deals
     _enrich_restaurants(parsed)
 
     if not parsed.get("restaurants"):
         parsed = _fallback_response(session, midpoint_area)
+        if not warning:
+            warning = "AI returned no results — showing generic suggestions."
 
     # Reuse session ID
     session_id = refine_request.session_id
@@ -538,6 +567,7 @@ async def refine_results(refine_request: RefineRequest) -> AgentResponse:
         area_reason=parsed.get("area_reason", ""),
         travel_summary=parsed.get("travel_summary", {}),
         restaurants=restaurants,
+        warning=warning,
     )
 
     # Update session with new results

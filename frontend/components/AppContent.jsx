@@ -157,6 +157,9 @@ export default function AppContent() {
       }
       const data = await res.json()
       setResult(data)
+      if (data.warning) {
+        setError(data.warning)
+      }
       localStorage.setItem(SESSION_KEY, data.session_id)
       setHasSavedSession(true)
       setSavedRestaurants([])
@@ -299,7 +302,12 @@ export default function AppContent() {
 
       {error && (
         <div className="px-4 pt-3">
-          <div className="bg-red-50 border border-red-200 rounded-2xl px-3 py-2 text-xs text-red-600">
+          <div className={`border rounded-2xl px-3 py-2 text-xs ${
+            result
+              ? 'bg-amber-50 border-amber-200 text-amber-700'
+              : 'bg-red-50 border-red-200 text-red-600'
+          }`}>
+            <span className="font-medium">{result ? '⚠️ ' : '❌ '}</span>
             {error}
           </div>
         </div>

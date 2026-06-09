@@ -7,7 +7,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from exa_py import Exa
 
-from backend.aws_config import REGION
+from backend.aws_config import REGION, VERIFY_SSL
 
 BUCKET_NAME = "tablefor-exa-cache"
 CACHE_TTL_HOURS = 6
@@ -38,7 +38,7 @@ PHOTO_DOMAINS = [
     "tripadvisor.com.sg",
 ]
 
-_s3 = boto3.client("s3", region_name=REGION)
+_s3 = boto3.client("s3", region_name=REGION, verify=VERIFY_SSL)
 _exa: Exa | None = None
 _bucket_ready = False
 _cache_enabled = True

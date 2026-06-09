@@ -50,7 +50,7 @@ def geocode_area(area_name: str) -> dict:
         f"{area_name}.json"
     )
     try:
-        with httpx.Client(timeout=10.0) as client:
+        with httpx.Client(timeout=10.0, verify=False) as client:
             response = client.get(
                 url,
                 params={"country": "SG", "access_token": token},
