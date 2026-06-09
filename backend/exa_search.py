@@ -312,23 +312,34 @@ RESERVATION_DOMAINS = [
 
 
 def search_reservation_url(restaurant_name: str) -> str | None:
-    """Search for a restaurant's reservation/booking URL."""
-    query = f"{restaurant_name} Singapore reservation book table"
+    """Search for a restaurant's actual reservation/booking URL via Exa."""
+    query = f"{restaurant_name} Singapore book reserve table chope"
     results = search_with_cache(
         query,
-        num_results=3,
+        num_results=5,
         include_domains=RESERVATION_DOMAINS,
     )
 
     for r in results:
         url = r.get("url", "")
-        # Only return URLs from actual reservation platforms
-        if any(domain in url for domain in RESERVATION_DOMAINS):
+        title = r.get("title", "").lower()
+        text = r.get("text", "").lower()
+        restaurant_lower = restaurant_name.lower()
+
+        # Check if this result is actually about this restaurant
+        name_parts = restaurant_lower.split()
+        # At least the first significant word of the restaurant name should appear
+        relevant = any(
+            part in title or part in text
+            for part in name_parts
+            if len(part) > 3
+        )
+
+        if relevant and any(domain in url for domain in RESERVATION_DOMAINS):
             return url
 
-    # Fallback: construct a Chope search URL (Singapore's main reservation platform)
-    # Only if the restaurant name seems like a proper sit-down restaurant
-    return f"https://www.chope.co/singapore-restaurants/search?q={restaurant_name.replace(' ', '+')}"
+    # No direct match found — don't return a generic search URL
+    return None
 
 
 def search_menu(restaurant_name: str) -> dict | None:
