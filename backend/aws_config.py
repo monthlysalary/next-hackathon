@@ -1,3 +1,3 @@
 import os
 
-REGION = os.getenv("AWS_DEFAULT_REGION", "us-west-2")
+REGION = os.getenv("AWS_DEFAULT_REGION", "ap-southeast-1")

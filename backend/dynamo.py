@@ -1,9 +1,22 @@
+import json
 import time
+from decimal import Decimal
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 
 from backend.aws_config import REGION
+
+
+def _convert_floats(obj):
+    """Convert all float values to Decimal for DynamoDB compatibility."""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: _convert_floats(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_convert_floats(i) for i in obj]
+    return obj
 
 TABLE_NAME = "tablefor-sessions"
 
@@ -69,7 +82,7 @@ def save_session(session_id: str, data: dict) -> None:
         _local_sessions[session_id] = item
         return
     try:
-        table.put_item(Item=item)
+        table.put_item(Item=_convert_floats(item))
     except (ClientError, NoCredentialsError, BotoCoreError) as e:
         print(f"DynamoDB save failed, using in-memory store: {e}")
         _local_sessions[session_id] = item

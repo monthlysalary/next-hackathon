@@ -1,20 +1,32 @@
 /** @type {import('tailwindcss').Config} */
-export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+module.exports = {
+  content: [
+    './app/**/*.{js,jsx}',
+    './components/**/*.{js,jsx}',
+  ],
   theme: {
     extend: {
       colors: {
-        bg: '#0d1117',
-        surface: '#161b22',
-        'surface-raised': '#21262d',
-        border: '#30363d',
-        accent: '#f97316',
-        'accent-hover': '#ea6c0a',
-        'text-primary': '#f0f6fc',
-        'text-secondary': '#8b949e',
-        success: '#3fb950',
-        'tag-bg': '#1f2937',
-        'tag-text': '#d1d5db',
+        bg: '#fdf6f0',
+        surface: '#ffffff',
+        'surface-raised': '#f5ede8',
+        border: '#e8ddd8',
+        accent: '#F28155',
+        'accent-hover': '#e06d3f',
+        'text-primary': '#1a1a1a',
+        'text-secondary': '#888888',
+        success: '#34A853',
+        'tag-bg': '#f5ede8',
+        'tag-text': '#666666',
+      },
+      boxShadow: {
+        phone: '0 2px 32px rgba(0,0,0,0.08)',
+        card: '0 2px 16px rgba(0,0,0,0.06)',
+      },
+      borderRadius: {
+        '2xl': '16px',
+        '3xl': '24px',
+        '4xl': '40px',
       },
     },
   },

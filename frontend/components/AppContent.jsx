@@ -1,12 +1,14 @@
+'use client'
+
 import { useState, useEffect } from 'react'
-import GroupSetup from './components/GroupSetup'
-import ResultsPanel from './components/ResultsPanel'
+import GroupSetup from './GroupSetup'
+import ResultsPanel from './ResultsPanel'
 import {
   API_URL,
   EMPTY_PERSON,
   DEMO_PERSONS,
   DEMO_RESULT,
-} from './constants'
+} from '@/lib/constants'
 
 const SESSION_KEY = 'tablefor_session_id'
 
@@ -30,7 +32,7 @@ const MUST_HAVE_MAP = {
   Parking: 'parking',
 }
 
-export default function App() {
+export default function AppContent() {
   const [view, setView] = useState('setup')
   const [groupName, setGroupName] = useState('Our Group')
   const [mealType, setMealType] = useState('dinner')
@@ -165,13 +167,14 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-bg">
-      <header className="border-b border-border bg-surface/80 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+    <div className="min-h-full bg-bg">
+      {/* App header inside the phone */}
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-border px-4 py-2.5">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-text-primary">TableFor</span>
+            <span className="text-base font-bold text-accent">TableFor</span>
             {isPro && (
-              <span className="px-2 py-0.5 rounded-full bg-accent/20 text-accent text-xs font-bold">
+              <span className="px-1.5 py-0.5 rounded-full bg-accent/20 text-accent text-[10px] font-bold">
                 PRO
               </span>
             )}
@@ -180,17 +183,17 @@ export default function App() {
             <button
               type="button"
               onClick={handleUpgrade}
-              className="px-3 py-1.5 text-xs font-medium bg-accent hover:bg-accent-hover text-white rounded-lg transition-colors"
+              className="px-2.5 py-1 text-[10px] font-medium bg-accent hover:bg-accent-hover text-white rounded-full transition-colors"
             >
-              TableFor Pro — S$4.99/mo
+              Go Pro
             </button>
           )}
         </div>
       </header>
 
       {error && (
-        <div className="max-w-4xl mx-auto px-4 pt-4">
-          <div className="bg-red-900/30 border border-red-700 rounded-lg px-4 py-3 text-sm text-red-300">
+        <div className="px-4 pt-3">
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-3 py-2 text-xs text-red-600">
             {error}
           </div>
         </div>

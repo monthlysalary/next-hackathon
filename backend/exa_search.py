@@ -98,9 +98,9 @@ def search_with_cache(query: str, **kwargs) -> list[dict]:
         return []
 
     try:
-        response = exa.search_and_contents(
+        response = exa.search(
             query,
-            text=True,
+            contents={"text": {"max_characters": 1000}},
             **kwargs,
         )
         results = []
@@ -151,7 +151,6 @@ def search_restaurants(area: str, dietary: list[str]) -> list[dict]:
     query = f"{area} Singapore restaurant {dietary_str} recommended 2024 2025"
     kwargs = {
         "num_results": 6,
-        "use_autoprompt": True,
         "include_domains": RESTAURANT_DOMAINS,
     }
 

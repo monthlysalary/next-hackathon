@@ -7,5 +7,6 @@ __pycache__/
 venv/
 node_modules/
 frontend/dist/
+frontend/.next/
 .DS_Store
 *.log
