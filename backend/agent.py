@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 
 from backend import dynamo, exa_search, location
 from backend.aws_config import REGION
-from backend.models import AgentResponse, GroupRequest, RestaurantResult
+from backend.models import AgentResponse, GroupRequest, RefineRequest, RestaurantResult
 
 # Tried in order until one works. Claude 4.x Sonnet is the sweet spot for this agent.
 DEFAULT_BEDROCK_MODELS = [
@@ -101,6 +101,10 @@ YOUR TASKS:
 
 7. Score 0-100 for group fit.
 
+8. For each restaurant, provide estimated opening hours if known
+   (e.g. "11:00 AM - 9:00 PM daily" or "Mon-Sat 11am-10pm, closed Sun").
+   If not known, use null.
+
 Return ONLY valid JSON, no markdown, no explanation:
 {{
   "suggested_area": "string",
@@ -123,7 +127,65 @@ Return ONLY valid JSON, no markdown, no explanation:
       "maps_url": "https://maps.google.com/?q=name+singapore",
       "latitude": null,
       "longitude": null,
-      "match_score": 85
+      "match_score": 85,
+      "opening_hours": "string or null"
+    }}
+  ]
+}}"""
+
+
+def _build_refine_prompt(
+    session_data: dict,
+    user_message: str,
+    exa_results: list[dict],
+) -> str:
+    """Build a prompt for refining results based on user feedback."""
+    return f"""You are a Singapore dining concierge AI.
+The user previously searched for restaurants and got results, but now wants adjustments.
+
+PREVIOUS RESULTS:
+- Suggested area: {session_data.get('suggested_area', 'Unknown')}
+- Restaurants found: {json.dumps([r.get('name', '') for r in session_data.get('restaurants', [])])}
+
+GROUP PROFILES:
+{json.dumps(session_data.get('persons', []), indent=2, default=str)}
+
+MEAL TYPE: {session_data.get('meal_type', 'dinner')}
+DAY: {session_data.get('day', 'today')}
+
+USER'S ADJUSTMENT REQUEST: "{user_message}"
+
+ADDITIONAL SEARCH RESULTS (based on user's request):
+{_format_exa_results(exa_results)}
+
+Based on the user's request, provide NEW top 3 restaurant recommendations
+that better match what they're looking for. Keep all the same constraints
+(dietary, budget) but adjust based on their feedback.
+
+Return ONLY valid JSON, no markdown, no explanation:
+{{
+  "suggested_area": "string",
+  "area_reason": "string",
+  "travel_summary": {{
+    "person_name": "~X min via [MRT line]"
+  }},
+  "restaurants": [
+    {{
+      "name": "string",
+      "area": "string",
+      "address": "string",
+      "cuisine": "string",
+      "price_range": "string e.g. S$8-15 per pax",
+      "tags": ["tag1", "tag2"],
+      "satisfies": ["name1", "name2"],
+      "deal": "string or null",
+      "summary": "string",
+      "why_this_group": "string",
+      "maps_url": "https://maps.google.com/?q=name+singapore",
+      "latitude": null,
+      "longitude": null,
+      "match_score": 85,
+      "opening_hours": "string or null"
     }}
   ]
 }}"""
@@ -147,7 +209,6 @@ def _parse_agent_response(text: str) -> dict:
 def _bedrock_model_ids() -> list[str]:
     configured = os.getenv("BEDROCK_MODEL_ID", "").strip()
     if configured:
-        # User's pick first, then defaults (skip duplicates)
         rest = [m for m in DEFAULT_BEDROCK_MODELS if m != configured]
         return [configured, *rest]
     return DEFAULT_BEDROCK_MODELS
@@ -189,10 +250,21 @@ def _call_bedrock(prompt: str) -> str:
 
 
 def _fallback_response(
-    request: GroupRequest,
+    request_or_session,
     midpoint_area: str,
 ) -> dict:
-    names = [p.name for p in request.persons]
+    # Handle both GroupRequest objects and session dicts
+    if hasattr(request_or_session, "persons"):
+        names = [p.name for p in request_or_session.persons]
+        persons_data = [
+            {"name": p.name, "location": p.location}
+            for p in request_or_session.persons
+        ]
+    else:
+        persons = request_or_session.get("persons", [])
+        names = [p.get("name", f"Person {i+1}") for i, p in enumerate(persons)]
+        persons_data = persons
+
     return {
         "suggested_area": midpoint_area,
         "area_reason": (
@@ -200,8 +272,8 @@ def _fallback_response(
             "offering reasonable MRT access for everyone."
         ),
         "travel_summary": {
-            p.name: f"~20-30 min via MRT from {p.location}"
-            for p in request.persons
+            name: f"~20-30 min via MRT"
+            for name in names
         },
         "restaurants": [
             {
@@ -224,6 +296,7 @@ def _fallback_response(
                 "latitude": None,
                 "longitude": None,
                 "match_score": 75,
+                "opening_hours": "8:00 AM - 10:00 PM daily",
             },
             {
                 "name": "Komala Vilas",
@@ -250,6 +323,7 @@ def _fallback_response(
                 "latitude": None,
                 "longitude": None,
                 "match_score": 80,
+                "opening_hours": "7:00 AM - 10:30 PM daily",
             },
             {
                 "name": "Hjh Maimunah Restaurant",
@@ -276,6 +350,7 @@ def _fallback_response(
                 "latitude": None,
                 "longitude": None,
                 "match_score": 85,
+                "opening_hours": "Mon-Sat 7:00 AM - 8:00 PM, closed Sun",
             },
         ],
     }
@@ -301,9 +376,37 @@ def _build_restaurants(parsed: dict, midpoint_area: str) -> list[RestaurantResul
             latitude=r.get("latitude"),
             longitude=r.get("longitude"),
             match_score=r.get("match_score", 70),
+            photo_url=r.get("photo_url"),
+            opening_hours=r.get("opening_hours"),
         )
         for r in parsed.get("restaurants", [])
     ]
+
+
+def _enrich_restaurants(parsed: dict) -> None:
+    """Add photo URLs and opening hours to restaurant results."""
+    for restaurant in parsed.get("restaurants", []):
+        name = restaurant.get("name", "")
+        if not name:
+            continue
+
+        # Search for deals if none found
+        if not restaurant.get("deal"):
+            deal = exa_search.search_deals(name)
+            if deal:
+                restaurant["deal"] = deal
+
+        # Search for photo
+        if not restaurant.get("photo_url"):
+            photo_url = exa_search.search_restaurant_photo(name)
+            if photo_url:
+                restaurant["photo_url"] = photo_url
+
+        # Search for opening hours if not provided by AI
+        if not restaurant.get("opening_hours"):
+            hours = exa_search.search_opening_hours(name)
+            if hours:
+                restaurant["opening_hours"] = hours
 
 
 async def run_agent(request: GroupRequest) -> AgentResponse:
@@ -338,11 +441,8 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
         print(f"Bedrock unavailable, using fallback: {e}")
         parsed = _fallback_response(request, midpoint_area)
 
-    for restaurant in parsed.get("restaurants", []):
-        if not restaurant.get("deal"):
-            deal = exa_search.search_deals(restaurant.get("name", ""))
-            if deal:
-                restaurant["deal"] = deal
+    # Enrich with photos, hours, deals
+    _enrich_restaurants(parsed)
 
     if not parsed.get("restaurants"):
         parsed = _fallback_response(request, midpoint_area)
@@ -365,6 +465,89 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
             "meal_type": request.meal_type,
             "day": request.day,
             "persons": [p.model_dump() for p in request.persons],
+            "suggested_area": response.suggested_area,
+            "area_reason": response.area_reason,
+            "travel_summary": response.travel_summary,
+            "restaurants": [r.model_dump() for r in response.restaurants],
+        },
+    )
+
+    return response
+
+
+async def refine_results(refine_request: RefineRequest) -> AgentResponse:
+    """Re-run the agent with user's adjustment message."""
+    session = dynamo.get_session(refine_request.session_id)
+    if not session:
+        raise ValueError("Session not found")
+
+    # Get the midpoint area from session
+    midpoint_area = session.get("suggested_area", "Bishan")
+
+    # Build dietary list from session persons
+    combined_dietary: list[str] = []
+    for person in session.get("persons", []):
+        for d in person.get("dietary", []):
+            if d.lower() != "none" and d not in combined_dietary:
+                combined_dietary.append(d)
+
+    # Do a new Exa search incorporating user's feedback
+    user_msg = refine_request.message.lower()
+    search_query_extra = ""
+    if any(w in user_msg for w in ["quiet", "peaceful", "calm"]):
+        search_query_extra = "quiet cozy"
+    elif any(w in user_msg for w in ["cheap", "budget", "affordable"]):
+        search_query_extra = "cheap affordable"
+    elif any(w in user_msg for w in ["fancy", "upscale", "fine dining"]):
+        search_query_extra = "fine dining upscale"
+    elif any(w in user_msg for w in ["outdoor", "alfresco"]):
+        search_query_extra = "outdoor alfresco"
+    else:
+        search_query_extra = refine_request.message[:50]
+
+    dietary_str = " ".join(combined_dietary)
+    query = f"{midpoint_area} Singapore restaurant {dietary_str} {search_query_extra} 2024 2025"
+    exa_results = exa_search.search_with_cache(
+        query,
+        num_results=6,
+        include_domains=exa_search.RESTAURANT_DOMAINS,
+    )
+
+    prompt = _build_refine_prompt(session, refine_request.message, exa_results)
+
+    try:
+        text = _call_bedrock(prompt)
+        parsed = _parse_agent_response(text)
+    except Exception as e:
+        print(f"Bedrock unavailable for refine, using fallback: {e}")
+        parsed = _fallback_response(session, midpoint_area)
+
+    # Enrich with photos, hours, deals
+    _enrich_restaurants(parsed)
+
+    if not parsed.get("restaurants"):
+        parsed = _fallback_response(session, midpoint_area)
+
+    # Reuse session ID
+    session_id = refine_request.session_id
+    restaurants = _build_restaurants(parsed, midpoint_area)
+
+    response = AgentResponse(
+        session_id=session_id,
+        suggested_area=parsed.get("suggested_area", midpoint_area),
+        area_reason=parsed.get("area_reason", ""),
+        travel_summary=parsed.get("travel_summary", {}),
+        restaurants=restaurants,
+    )
+
+    # Update session with new results
+    dynamo.save_session(
+        session_id,
+        {
+            "group_name": session.get("group_name", "Our Group"),
+            "meal_type": session.get("meal_type", "dinner"),
+            "day": session.get("day", "today"),
+            "persons": session.get("persons", []),
             "suggested_area": response.suggested_area,
             "area_reason": response.area_reason,
             "travel_summary": response.travel_summary,

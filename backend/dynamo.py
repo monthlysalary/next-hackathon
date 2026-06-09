@@ -18,6 +18,7 @@ def _convert_floats(obj):
         return [_convert_floats(i) for i in obj]
     return obj
 
+
 TABLE_NAME = "tablefor-sessions"
 
 _dynamodb = boto3.resource("dynamodb", region_name=REGION)
@@ -75,6 +76,8 @@ def save_session(session_id: str, data: dict) -> None:
         "session_id": session_id,
         "ttl": int(time.time()) + 86400,
         "saved_restaurants": [],
+        "votes": {},
+        "voters": [],
         **data,
     }
     table = _get_table()
@@ -128,3 +131,67 @@ def save_restaurant(session_id: str, restaurant: dict) -> None:
         session = _local_sessions.get(session_id)
         if session:
             session.setdefault("saved_restaurants", []).append(restaurant)
+
+
+def cast_vote(session_id: str, voter_name: str, restaurant_name: str) -> dict:
+    """Cast a vote for a restaurant. Returns updated vote tallies."""
+    session = get_session(session_id)
+    if not session:
+        return {"votes": {}, "voters": []}
+
+    votes = session.get("votes", {})
+    voters = session.get("voters", [])
+
+    # Convert Decimal values if from DynamoDB
+    if isinstance(votes, dict):
+        votes = {k: list(v) if not isinstance(v, list) else v for k, v in votes.items()}
+
+    # Remove previous vote by this voter (one vote per person)
+    for r_name in list(votes.keys()):
+        if voter_name in votes[r_name]:
+            votes[r_name].remove(voter_name)
+            if not votes[r_name]:
+                del votes[r_name]
+
+    # Add new vote
+    if restaurant_name not in votes:
+        votes[restaurant_name] = []
+    votes[restaurant_name].append(voter_name)
+
+    # Track unique voters
+    if voter_name not in voters:
+        voters.append(voter_name)
+
+    # Persist
+    table = _get_table()
+    if table is None:
+        session["votes"] = votes
+        session["voters"] = voters
+        _local_sessions[session_id] = session
+    else:
+        try:
+            table.update_item(
+                Key={"session_id": session_id},
+                UpdateExpression="SET votes = :votes, voters = :voters",
+                ExpressionAttributeValues={
+                    ":votes": votes,
+                    ":voters": voters,
+                },
+            )
+        except (ClientError, NoCredentialsError, BotoCoreError) as e:
+            print(f"DynamoDB vote failed: {e}")
+            session["votes"] = votes
+            session["voters"] = voters
+            _local_sessions[session_id] = session
+
+    return {"votes": votes, "voters": voters}
+
+
+def get_votes(session_id: str) -> dict:
+    """Get current vote tallies for a session."""
+    session = get_session(session_id)
+    if not session:
+        return {"votes": {}, "voters": []}
+    votes = session.get("votes", {})
+    voters = session.get("voters", [])
+    return {"votes": votes, "voters": voters}
