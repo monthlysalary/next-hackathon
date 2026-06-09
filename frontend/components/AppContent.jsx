@@ -169,7 +169,7 @@ export default function AppContent() {
   return (
     <div className="min-h-full bg-bg">
       {/* App header inside the phone */}
-      <header className="sticky top-0 z-30 bg-surface/90 backdrop-blur border-b border-border px-4 py-2.5">
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-border px-4 py-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-base font-bold text-accent">TableFor</span>
@@ -193,7 +193,7 @@ export default function AppContent() {
 
       {error && (
         <div className="px-4 pt-3">
-          <div className="bg-red-900/30 border border-red-700 rounded-lg px-3 py-2 text-xs text-red-300">
+          <div className="bg-red-50 border border-red-200 rounded-2xl px-3 py-2 text-xs text-red-600">
             {error}
           </div>
         </div>

@@ -49,7 +49,7 @@ export default function GroupSetup({
           <button
             type="button"
             onClick={onContinueSession}
-            className="flex-1 px-3 py-2 text-xs border border-border rounded-xl text-text-secondary hover:text-text-primary hover:border-accent transition-colors"
+            className="flex-1 px-3 py-2 text-xs border border-border rounded-[14px] text-text-secondary hover:text-text-primary hover:border-accent transition-colors"
           >
             Continue session
           </button>
@@ -57,7 +57,7 @@ export default function GroupSetup({
         <button
           type="button"
           onClick={onDemo}
-          className="flex-1 px-3 py-2 text-xs bg-surface-raised border border-border rounded-xl text-accent hover:bg-border transition-colors"
+          className="flex-1 px-3 py-2 text-xs bg-surface-raised border border-border rounded-[14px] text-accent hover:bg-border transition-colors"
         >
           Try demo
         </button>
@@ -65,33 +65,35 @@ export default function GroupSetup({
 
       {/* Occasion */}
       <div className="mb-4">
-        <label className="block text-[11px] uppercase tracking-wider text-text-secondary mb-1.5 font-medium">
+        <label className="block text-[14px] font-medium text-text-primary mb-2">
           Occasion
         </label>
-        <input
-          type="text"
-          value={groupName}
-          onChange={(e) => setGroupName(e.target.value)}
-          placeholder="Friday dinner"
-          className="w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder:text-text-secondary/50 focus:outline-none focus:border-accent transition-colors"
-        />
+        <div className="bg-surface-raised rounded-[14px] flex items-center px-3.5 h-[52px]">
+          <input
+            type="text"
+            value={groupName}
+            onChange={(e) => setGroupName(e.target.value)}
+            placeholder="Friday dinner"
+            className="w-full bg-transparent border-none outline-none text-[15px] text-text-primary placeholder:text-text-secondary/60"
+          />
+        </div>
       </div>
 
       {/* Meal type */}
       <div className="mb-4">
-        <label className="block text-[11px] uppercase tracking-wider text-text-secondary mb-1.5 font-medium">
+        <label className="block text-[14px] font-medium text-text-primary mb-2">
           Meal
         </label>
-        <div className="flex gap-1.5">
+        <div className="flex gap-2">
           {mealOptions.map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMealType(m.toLowerCase())}
-              className={`flex-1 px-2 py-2 rounded-xl text-xs font-medium transition-colors ${
+              className={`flex-1 px-2 py-2.5 rounded-[14px] text-xs font-medium transition-colors ${
                 mealType === m.toLowerCase()
                   ? 'bg-accent text-white'
-                  : 'bg-surface border border-border text-text-secondary'
+                  : 'bg-surface-raised text-text-secondary border border-border'
               }`}
             >
               {m}
@@ -102,19 +104,19 @@ export default function GroupSetup({
 
       {/* Day */}
       <div className="mb-5">
-        <label className="block text-[11px] uppercase tracking-wider text-text-secondary mb-1.5 font-medium">
+        <label className="block text-[14px] font-medium text-text-primary mb-2">
           When
         </label>
-        <div className="flex gap-1.5">
+        <div className="flex gap-2">
           {dayOptions.map((d) => (
             <button
               key={d}
               type="button"
               onClick={() => setDay(d.toLowerCase())}
-              className={`flex-1 px-2 py-2 rounded-xl text-xs font-medium transition-colors ${
+              className={`flex-1 px-2 py-2.5 rounded-[14px] text-xs font-medium transition-colors ${
                 day === d.toLowerCase()
                   ? 'bg-accent text-white'
-                  : 'bg-surface border border-border text-text-secondary'
+                  : 'bg-surface-raised text-text-secondary border border-border'
               }`}
             >
               {d}
@@ -126,7 +128,7 @@ export default function GroupSetup({
       {/* People section */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-text-primary">
+          <h2 className="text-[14px] font-semibold text-text-primary">
             Group ({persons.length}/6)
           </h2>
         </div>
@@ -146,7 +148,7 @@ export default function GroupSetup({
           <button
             type="button"
             onClick={addPerson}
-            className="mt-3 w-full px-3 py-2.5 text-xs border border-dashed border-border rounded-xl text-text-secondary hover:text-accent hover:border-accent transition-colors"
+            className="mt-3 w-full px-3 py-3 text-xs border border-dashed border-border rounded-[14px] text-text-secondary hover:text-accent hover:border-accent transition-colors"
           >
             + Add person
           </button>
@@ -158,7 +160,7 @@ export default function GroupSetup({
         type="button"
         onClick={onFind}
         disabled={!canFind || loading}
-        className="w-full py-3.5 rounded-2xl bg-accent hover:bg-accent-hover text-white font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-accent/20"
+        className="w-full py-4 rounded-[16px] bg-accent hover:bg-accent-hover text-white font-semibold text-[17px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {loading ? (
           <span className="flex items-center justify-center gap-2">
@@ -166,7 +168,7 @@ export default function GroupSetup({
             Finding...
           </span>
         ) : (
-          'Find restaurants'
+          <>Find restaurants →</>
         )}
       </button>
     </div>

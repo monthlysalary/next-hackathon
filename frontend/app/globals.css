@@ -4,8 +4,8 @@
 
 body {
   margin: 0;
-  background-color: #0a0a0f;
-  color: #f0f6fc;
+  background-color: #fdf6f0;
+  color: #1a1a1a;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -21,18 +21,19 @@ body {
   background: transparent;
 }
 .phone-scroll::-webkit-scrollbar-thumb {
-  background: #30363d;
+  background: #e8ddd8;
   border-radius: 4px;
 }
 
 /* Mapbox overrides */
 .mapboxgl-popup-content {
-  background: #21262d !important;
-  color: #f0f6fc !important;
-  border: 1px solid #30363d;
-  border-radius: 8px;
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  border: 1px solid #e8ddd8;
+  border-radius: 12px;
   padding: 10px 14px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
 }
 .mapboxgl-popup-tip {
-  border-top-color: #21262d !important;
+  border-top-color: #ffffff !important;
 }

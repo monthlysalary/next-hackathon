@@ -37,39 +37,39 @@ export default function ResultsPanel({
         <button
           type="button"
           onClick={onStartOver}
-          className="px-3 py-1.5 text-[10px] bg-surface-raised border border-border rounded-xl text-text-secondary hover:text-text-primary transition-colors"
+          className="px-3 py-1.5 text-[11px] bg-white border border-border rounded-[14px] text-text-secondary hover:text-text-primary transition-colors shadow-card"
         >
           ← Back
         </button>
         <button
           type="button"
           onClick={() => setShowMap(!showMap)}
-          className="px-3 py-1.5 text-[10px] border border-border rounded-xl text-text-secondary hover:text-accent hover:border-accent transition-colors"
+          className="px-3 py-1.5 text-[11px] border border-border rounded-[14px] text-text-secondary hover:text-accent hover:border-accent transition-colors bg-white shadow-card"
         >
           {showMap ? '📋 List' : '🗺️ Map'}
         </button>
         <button
           type="button"
           onClick={handleShare}
-          className="ml-auto px-3 py-1.5 text-[10px] border border-border rounded-xl text-text-secondary hover:text-accent hover:border-accent transition-colors"
+          className="ml-auto px-3 py-1.5 text-[11px] border border-border rounded-[14px] text-text-secondary hover:text-accent hover:border-accent transition-colors bg-white shadow-card"
         >
           Share
         </button>
       </div>
 
       {/* Meetup banner */}
-      <div className="bg-accent/10 border border-accent/30 rounded-2xl p-3 mb-4">
+      <div className="bg-orange-50 border border-orange-200 rounded-[20px] p-3.5 mb-4">
         <h2 className="text-sm font-semibold text-accent mb-0.5">
           Meet at {result.suggested_area}
         </h2>
-        <p className="text-[11px] text-text-primary leading-relaxed mb-2">
+        <p className="text-[12px] text-text-primary leading-relaxed mb-2">
           {result.area_reason}
         </p>
         <div className="flex flex-wrap gap-1.5">
           {Object.entries(result.travel_summary || {}).map(([name, time]) => (
             <span
               key={name}
-              className="px-2 py-0.5 rounded-full bg-surface text-[10px] text-text-secondary border border-border"
+              className="px-2 py-0.5 rounded-full bg-white text-[10px] text-text-secondary border border-border"
             >
               <span className="text-text-primary font-medium">{name}</span> · {time}
             </span>
@@ -79,7 +79,7 @@ export default function ResultsPanel({
 
       {/* Map or cards */}
       {showMap ? (
-        <div className="h-[400px] rounded-2xl overflow-hidden border border-border">
+        <div className="h-[400px] rounded-[20px] overflow-hidden border border-border shadow-card">
           <MapView
             persons={persons}
             suggestedArea={result.suggested_area}
