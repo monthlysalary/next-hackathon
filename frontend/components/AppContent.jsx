@@ -14,6 +14,7 @@ import {
 import { fetchUserSessions, saveUserSession } from '@/lib/userDb'
 
 const SESSION_KEY = 'tablefor_session_id'
+const VOTER_KEY = 'tablefor_voter_name'
 
 const DIETARY_MAP = {
   Halal: 'halal',
@@ -72,6 +73,9 @@ export default function AppContent() {
       }
     }
   }, [])
+  const [voterName, setVoterName] = useState('')
+  const [votes, setVotes] = useState({})
+  const [voters, setVoters] = useState([])
 
   useEffect(() => {
     if (!user) {
@@ -118,12 +122,60 @@ export default function AppContent() {
       setSavedRestaurants(
         (data.saved_restaurants || []).map((r) => r.name || r),
       )
+      setVotes(data.votes || {})
+      setVoters(data.voters || [])
       localStorage.setItem(SESSION_KEY, sessionId)
       setView('results')
     } catch {
       /* ignore */
     }
   }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('upgraded') === 'true') {
+      setIsPro(true)
+      localStorage.setItem('tablefor_pro', 'true')
+    } else if (localStorage.getItem('tablefor_pro') === 'true') {
+      setIsPro(true)
+    }
+
+    // Restore voter name
+    const savedVoter = localStorage.getItem(VOTER_KEY)
+    if (savedVoter) setVoterName(savedVoter)
+
+    const sessionId =
+      params.get('session') || localStorage.getItem(SESSION_KEY)
+    if (sessionId) {
+      setHasSavedSession(true)
+      if (params.get('session')) {
+        loadSession(sessionId)
+      }
+    }
+  }, [])
+
+  // Poll votes every 5 seconds when on results view
+  useEffect(() => {
+    if (view !== 'results' || !result?.session_id) return
+    if (result.session_id === 'demo-session') return
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API_URL}/votes/${result.session_id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setVotes(data.votes || {})
+          setVoters(data.voters || [])
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, 5000)
+    return () => clearInterval(interval)
+  }, [view, result?.session_id])
 
   const handleContinueSession = () => {
     const sessionId = localStorage.getItem(SESSION_KEY)
@@ -160,11 +212,82 @@ export default function AppContent() {
       setHasSavedSession(true)
       setSavedRestaurants([])
       await persistSessionForUser(data)
+      setVotes({})
+      setVoters([])
       setView('results')
     } catch (e) {
       setError(e.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRefine = async (message) => {
+    if (!result?.session_id) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch(`${API_URL}/refine`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: result.session_id,
+          message,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.detail || 'Failed to refine results')
+      }
+      const data = await res.json()
+      setResult(data)
+      setVotes({})
+      setVoters([])
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleVote = async (restaurantName) => {
+    if (!result?.session_id || !voterName.trim()) return
+
+    // Optimistic update
+    const newVotes = { ...votes }
+    for (const key of Object.keys(newVotes)) {
+      newVotes[key] = (newVotes[key] || []).filter((v) => v !== voterName)
+      if (newVotes[key].length === 0) delete newVotes[key]
+    }
+    newVotes[restaurantName] = [...(newVotes[restaurantName] || []), voterName]
+    setVotes(newVotes)
+
+    if (!voters.includes(voterName)) {
+      setVoters([...voters, voterName])
+    }
+
+    localStorage.setItem(VOTER_KEY, voterName)
+
+    // For demo mode, just keep it local
+    if (result.session_id === 'demo-session') return
+
+    try {
+      const res = await fetch(`${API_URL}/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: result.session_id,
+          voter_name: voterName,
+          restaurant_name: restaurantName,
+        }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setVotes(data.votes || {})
+        setVoters(data.voters || [])
+      }
+    } catch {
+      /* ignore */
     }
   }
 
@@ -175,6 +298,8 @@ export default function AppContent() {
     setDay('today')
     setResult(DEMO_RESULT)
     setSavedRestaurants([])
+    setVotes({})
+    setVoters([])
     setView('results')
   }
 
@@ -201,7 +326,7 @@ export default function AppContent() {
 
   return (
     <div className="min-h-full bg-bg">
-      {/* App header inside the phone */}
+      {/* App header */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-border px-4 py-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -283,6 +408,13 @@ export default function AppContent() {
           onStartOver={handleStartOver}
           savedRestaurants={savedRestaurants}
           onRestaurantSaved={handleRestaurantSaved}
+          onRefine={handleRefine}
+          loading={loading}
+          votes={votes}
+          voters={voters}
+          voterName={voterName}
+          setVoterName={setVoterName}
+          onVote={handleVote}
         />
       )}
     </div>

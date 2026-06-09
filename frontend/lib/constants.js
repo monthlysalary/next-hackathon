@@ -63,13 +63,6 @@ export const MUST_HAVE_OPTIONS = [
 
 export const AVOID_OPTIONS = ['Crowded', 'Loud', 'Stairs']
 
-export const CARD_ACCENTS = [
-  'border-l-orange-500',
-  'border-l-teal-500',
-  'border-l-purple-500',
-  'border-l-blue-500',
-]
-
 export const EMPTY_PERSON = {
   name: '',
   location: '',
@@ -163,6 +156,8 @@ export const DEMO_RESULT = {
       maps_url: 'https://maps.google.com/?q=Hjh+Maimunah+Singapore',
       latitude: 1.3009,
       longitude: 103.8559,
+      photo_url: 'https://burpple.com/hjh-maimunah',
+      opening_hours: 'Mon-Sat 7:00 AM - 8:00 PM, closed Sun',
     },
     {
       name: 'Komala Vilas',
@@ -189,6 +184,8 @@ export const DEMO_RESULT = {
       maps_url: 'https://maps.google.com/?q=Komala+Vilas+Singapore',
       latitude: 1.3065,
       longitude: 103.8512,
+      photo_url: 'https://burpple.com/komala-vilas',
+      opening_hours: '7:00 AM - 10:30 PM daily',
     },
     {
       name: 'Bishan North Food Centre',
@@ -215,6 +212,8 @@ export const DEMO_RESULT = {
       maps_url: 'https://maps.google.com/?q=Bishan+North+Food+Centre+Singapore',
       latitude: 1.352,
       longitude: 103.848,
+      photo_url: null,
+      opening_hours: '6:00 AM - 10:00 PM daily',
     },
   ],
 }

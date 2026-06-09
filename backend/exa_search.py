@@ -29,6 +29,15 @@ DEAL_DOMAINS = [
     "reddit.com",
 ]
 
+PHOTO_DOMAINS = [
+    "burpple.com",
+    "hungrygowhere.com",
+    "danielfooddiary.com",
+    "misstamchiak.com",
+    "sethlui.com",
+    "tripadvisor.com.sg",
+]
+
 _s3 = boto3.client("s3", region_name=REGION)
 _exa: Exa | None = None
 _bucket_ready = False
@@ -197,4 +206,84 @@ def search_deals(restaurant_name: str) -> str | None:
                 return snippet
     if results:
         return results[0].get("text", "")[:200] or None
+    return None
+
+
+def search_restaurant_photo(restaurant_name: str) -> str | None:
+    """Search for a restaurant photo URL via Exa."""
+    exa = _get_exa()
+    if not exa:
+        return None
+
+    query = f"{restaurant_name} Singapore restaurant food photo"
+    cache_key = get_cache_key(f"photo:{query}")
+    s3_key = f"photos/{cache_key}.json"
+
+    # Check cache first
+    global _cache_enabled
+    if _cache_enabled:
+        try:
+            _ensure_bucket()
+            if _bucket_ready:
+                obj = _s3.get_object(Bucket=BUCKET_NAME, Key=s3_key)
+                cached = json.loads(obj["Body"].read().decode())
+                return cached.get("photo_url")
+        except Exception:
+            pass
+
+    try:
+        response = exa.search(
+            query,
+            num_results=3,
+            include_domains=PHOTO_DOMAINS,
+        )
+        photo_url = None
+        for r in response.results:
+            url = r.url or ""
+            # Burpple and food blogs often have og:image in their pages
+            if any(domain in url for domain in PHOTO_DOMAINS):
+                photo_url = url
+                break
+
+        # Cache result
+        if _cache_enabled and _bucket_ready:
+            try:
+                _s3.put_object(
+                    Bucket=BUCKET_NAME,
+                    Key=s3_key,
+                    Body=json.dumps({"photo_url": photo_url}),
+                    ContentType="application/json",
+                )
+            except Exception:
+                pass
+
+        return photo_url
+    except Exception as e:
+        print(f"Photo search failed for {restaurant_name}: {e}")
+        return None
+
+
+def search_opening_hours(restaurant_name: str) -> str | None:
+    """Search for opening hours of a restaurant."""
+    query = f"{restaurant_name} Singapore opening hours"
+    results = search_with_cache(
+        query,
+        num_results=2,
+        include_domains=RESTAURANT_DOMAINS + ["google.com"],
+    )
+    for r in results:
+        text = r.get("text", "").lower()
+        # Look for time patterns like "10am", "11:00", "mon-fri"
+        if any(kw in text for kw in ["am", "pm", "open", "close", "hours", "daily"]):
+            # Extract the relevant snippet
+            lines = r.get("text", "").split("\n")
+            for line in lines:
+                lower_line = line.lower()
+                if any(
+                    kw in lower_line
+                    for kw in ["am", "pm", "open", "close", "hours", "daily", "mon"]
+                ):
+                    cleaned = line.strip()
+                    if 10 < len(cleaned) < 150:
+                        return cleaned
     return None

@@ -37,3 +37,4 @@ def get_client(service: str):
 
 def get_resource(service: str):
     return get_boto_session().resource(service)
+REGION = os.getenv("AWS_DEFAULT_REGION", "us-west-2")

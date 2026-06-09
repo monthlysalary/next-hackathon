@@ -7,7 +7,14 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend import agent, dynamo, location
-from backend.models import AgentResponse, GpsRequest, GroupRequest
+from backend.models import (
+    AgentResponse,
+    GpsRequest,
+    GroupRequest,
+    RefineRequest,
+    VoteRequest,
+    VoteStatus,
+)
 
 load_dotenv()
 
@@ -19,6 +26,12 @@ app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"https://.*\.vercel\.app|http://(localhost|127\.0\.0\.1):\d+",
     allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,6 +50,33 @@ async def find_restaurants(request: GroupRequest):
     if len(request.persons) > 6:
         raise HTTPException(status_code=400, detail="Maximum 6 persons allowed")
     return await agent.run_agent(request)
+
+
+@app.post("/refine", response_model=AgentResponse)
+async def refine_restaurants(request: RefineRequest):
+    """Re-run the AI with user's adjustment message (e.g. 'quieter', 'cheaper')."""
+    try:
+        return await agent.refine_results(request)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/vote")
+def vote_restaurant(request: VoteRequest):
+    """Cast a vote for a restaurant. Each person gets one vote per session."""
+    session = dynamo.get_session(request.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    result = dynamo.cast_vote(
+        request.session_id, request.voter_name, request.restaurant_name
+    )
+    return result
+
+
+@app.get("/votes/{session_id}")
+def get_votes(session_id: str):
+    """Get current vote tallies for a session (for polling from multiple devices)."""
+    return dynamo.get_votes(session_id)
 
 
 @app.get("/session/{session_id}")

@@ -8,7 +8,7 @@ import {
   DIETARY_OPTIONS,
   CUISINE_OPTIONS,
   MUST_HAVE_OPTIONS,
-  CARD_ACCENTS,
+  AVOID_OPTIONS,
 } from '@/lib/constants'
 
 function PillGroup({ options, selected, onChange, multi = true }) {
@@ -88,9 +88,7 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
           })
           const data = await res.json()
           update('location', data.area)
-        } catch {
-          /* ignore */
-        } finally {
+        } catch { /* ignore */ } finally {
           setGpsLoading(false)
         }
       },
@@ -110,7 +108,7 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
 
   return (
     <div className={`bg-white border border-border rounded-[20px] p-3.5 border-l-4 ${accent} shadow-card`}>
-      {/* Header - always visible */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <button
           type="button"
@@ -230,6 +228,15 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
               options={MUST_HAVE_OPTIONS}
               selected={person.must_have}
               onChange={(v) => update('must_have', v)}
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] text-text-secondary mb-1">Avoid</label>
+            <PillGroup
+              options={AVOID_OPTIONS}
+              selected={person.avoid || []}
+              onChange={(v) => update('avoid', v)}
             />
           </div>
         </div>
