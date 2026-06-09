@@ -56,43 +56,50 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
     onChange(index, { ...person, [field]: value })
   }
 
-  const handleLocationInput = async (value) => {
+  const handleLocationInput = (value) => {
     update('location', value)
-    if (value.length >= 2) {
-      // Try backend validation for fuzzy matching
-      try {
-        const res = await fetch(
-          `${API_URL}/validate-location/${encodeURIComponent(value)}`,
-        )
-        if (res.ok) {
-          const data = await res.json()
-          if (data.valid) {
-            setSuggestions([data.area])
-            setLocationError(null)
-          } else if (data.suggestions.length > 0) {
-            setSuggestions(data.suggestions)
-            setLocationError(data.message)
-          } else {
-            // Fall back to local filter
-            const filtered = SINGAPORE_AREAS.filter((a) =>
-              a.toLowerCase().includes(value.toLowerCase()),
-            )
-            setSuggestions(filtered.slice(0, 4))
-            setLocationError(filtered.length === 0 ? data.message : null)
-          }
-          return
-        }
-      } catch {
-        // Backend unavailable — fall back to local filter
-      }
-      const filtered = SINGAPORE_AREAS.filter((a) =>
-        a.toLowerCase().includes(value.toLowerCase()),
-      )
+    setLocationError(null)
+
+    if (value.length < 1) {
+      setSuggestions([])
+      return
+    }
+
+    // Fast local filter first (no network, instant)
+    const filtered = SINGAPORE_AREAS.filter((a) =>
+      a.toLowerCase().includes(value.toLowerCase()),
+    )
+
+    if (filtered.length > 0) {
       setSuggestions(filtered.slice(0, 4))
-      setLocationError(null)
+      return
+    }
+
+    // Only hit backend for fuzzy match if local filter found nothing
+    // and input is long enough to be meaningful
+    if (value.length >= 3) {
+      // Debounce: use a timeout to avoid hammering the API
+      clearTimeout(window._locationTimeout)
+      window._locationTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch(
+            `${API_URL}/validate-location/${encodeURIComponent(value)}`,
+          )
+          if (res.ok) {
+            const data = await res.json()
+            if (data.valid) {
+              setSuggestions([data.area])
+            } else if (data.suggestions.length > 0) {
+              setSuggestions(data.suggestions)
+              setLocationError(data.message)
+            }
+          }
+        } catch {
+          // Backend unavailable — no suggestions
+        }
+      }, 300)
     } else {
       setSuggestions([])
-      setLocationError(null)
     }
   }
 
