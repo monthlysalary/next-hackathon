@@ -158,6 +158,7 @@ export const DEMO_RESULT = {
       longitude: 103.8559,
       photo_url: 'https://burpple.com/hjh-maimunah',
       opening_hours: 'Mon-Sat 7:00 AM - 8:00 PM, closed Sun',
+      reservation_url: 'https://www.chope.co/singapore-restaurants/restaurant/hjh-maimunah-restaurant-jalan-pisang',
     },
     {
       name: 'Komala Vilas',
@@ -186,6 +187,7 @@ export const DEMO_RESULT = {
       longitude: 103.8512,
       photo_url: 'https://burpple.com/komala-vilas',
       opening_hours: '7:00 AM - 10:30 PM daily',
+      reservation_url: 'https://www.chope.co/singapore-restaurants/restaurant/komala-vilas-serangoon-road',
     },
     {
       name: 'Bishan North Food Centre',

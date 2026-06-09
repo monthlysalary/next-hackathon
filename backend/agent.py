@@ -377,7 +377,7 @@ def _fallback_response(
                 "match_score": 85,
                 "opening_hours": "Mon-Sat 7:00 AM - 8:00 PM, closed Sun",
                 "accepts_reservations": True,
-                "reservation_url": "https://www.chope.co/singapore-restaurants/search?q=Hjh+Maimunah",
+                "reservation_url": "https://www.chope.co/singapore-restaurants/restaurant/hjh-maimunah-restaurant-jalan-pisang",
             },
         ],
     }
