@@ -122,6 +122,33 @@ def main() -> int:
         check("Exa API key", False, "missing EXA_API_KEY")
 
     print()
+
+    onemap_token = os.getenv("ONEMAP_ACCESS_TOKEN", "")
+    has_onemap = bool(onemap_token and onemap_token != "your_onemap_token")
+    if has_onemap:
+        try:
+            from backend.travel import get_public_transit_route
+
+            route = get_public_transit_route(
+                1.3496,
+                103.9568,  # Tampines
+                1.3520,
+                103.8480,  # Bishan
+                meal_type="dinner",
+                day="today",
+            )
+            check(
+                "OneMap transit routing",
+                route is not None,
+                f"~{route['minutes']} min via {route['lines']}" if route else "no route",
+            )
+        except Exception as e:
+            all_ok = False
+            check("OneMap transit routing", False, str(e)[:80])
+    else:
+        check("OneMap access token", False, "missing ONEMAP_ACCESS_TOKEN (optional)")
+
+    print()
     if all_ok:
         print("All checks passed. Restart backend and try Find restaurants.")
         return 0

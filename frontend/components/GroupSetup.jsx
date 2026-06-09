@@ -2,6 +2,7 @@
 
 import PersonCard from './PersonCard'
 import { EMPTY_PERSON } from '@/lib/constants'
+import { FREE_MAX_PERSONS } from '@/lib/planLimits'
 
 export default function GroupSetup({
   groupName,
@@ -19,8 +20,12 @@ export default function GroupSetup({
   hasSavedSession,
   userSessions = [],
   onLoadUserSession,
+  loadingSessionId,
   isSignedIn = false,
   onSignIn,
+  isPro = false,
+  onUpgrade,
+  maxPersons = FREE_MAX_PERSONS,
 }) {
   const updatePerson = (index, person) => {
     const next = [...persons]
@@ -29,9 +34,13 @@ export default function GroupSetup({
   }
 
   const addPerson = () => {
-    if (persons.length < 6) {
-      setPersons([...persons, { ...EMPTY_PERSON }])
+    if (persons.length >= maxPersons) {
+      if (!isPro) {
+        onUpgrade?.()
+      }
+      return
     }
+    setPersons([...persons, { ...EMPTY_PERSON }])
   }
 
   const removePerson = (index) => {
@@ -42,7 +51,7 @@ export default function GroupSetup({
     persons.length >= 2 &&
     persons.every((p) => p.name.trim() && p.location.trim())
 
-  const mealOptions = ['Lunch', 'Dinner', 'Supper', 'Any']
+  const mealOptions = ['Lunch', 'Dinner', 'Dessert', 'Supper', 'Any']
   const dayOptions = ['Today', 'Tomorrow', 'Weekend']
 
   return (
@@ -53,7 +62,8 @@ export default function GroupSetup({
           <button
             type="button"
             onClick={onContinueSession}
-            className="flex-1 px-3 py-2 text-xs border border-border rounded-[14px] text-text-secondary hover:text-text-primary hover:border-accent transition-colors"
+            disabled={Boolean(loadingSessionId)}
+            className="flex-1 px-3 py-2 text-xs border border-border rounded-[14px] text-text-secondary hover:text-text-primary hover:border-accent transition-colors disabled:opacity-50"
           >
             Continue session
           </button>
@@ -67,6 +77,17 @@ export default function GroupSetup({
         </button>
       </div>
 
+      {!isPro && (
+        <div className="mb-5 px-3.5 py-3 bg-orange-50 border border-orange-200 rounded-[14px] text-[11px] text-orange-800">
+          <span className="font-semibold">Free plan:</span> up to {FREE_MAX_PERSONS} people · 1 search/day.
+          {' '}
+          <button type="button" onClick={onUpgrade} className="underline font-medium">
+            Go Pro
+          </button>
+          {' '}for unlimited.
+        </div>
+      )}
+
       {isSignedIn && userSessions.length > 0 && (
         <div className="mb-5">
           <label className="block text-[14px] font-medium text-text-primary mb-2">
@@ -78,7 +99,8 @@ export default function GroupSetup({
                 key={session.id}
                 type="button"
                 onClick={() => onLoadUserSession?.(session.session_id)}
-                className="w-full text-left px-3.5 py-3 bg-surface-raised border border-border rounded-[14px] hover:border-accent transition-colors"
+                disabled={loadingSessionId === session.session_id}
+                className="w-full text-left px-3.5 py-3 bg-surface-raised border border-border rounded-[14px] hover:border-accent transition-colors disabled:opacity-60"
               >
                 <p className="text-sm font-medium text-text-primary truncate">
                   {session.group_name || 'Dining session'}
@@ -88,6 +110,7 @@ export default function GroupSetup({
                   {session.created_at
                     ? ` · ${new Date(session.created_at).toLocaleDateString()}`
                     : ''}
+                  {loadingSessionId === session.session_id ? ' · Loading…' : ''}
                 </p>
               </button>
             ))}
@@ -126,13 +149,13 @@ export default function GroupSetup({
         <label className="block text-[14px] font-medium text-text-primary mb-2">
           Meal
         </label>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {mealOptions.map((m) => (
             <button
               key={m}
               type="button"
               onClick={() => setMealType(m.toLowerCase())}
-              className={`flex-1 px-2 py-2.5 rounded-[14px] text-xs font-medium transition-colors ${
+              className={`px-3 py-2.5 rounded-[14px] text-xs font-medium transition-colors ${
                 mealType === m.toLowerCase()
                   ? 'bg-accent text-white'
                   : 'bg-surface-raised text-text-secondary border border-border'
@@ -171,7 +194,7 @@ export default function GroupSetup({
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-[14px] font-semibold text-text-primary">
-            Group ({persons.length}/6)
+            Group ({persons.length}/{maxPersons})
           </h2>
         </div>
         <div className="space-y-3">
@@ -186,7 +209,7 @@ export default function GroupSetup({
             />
           ))}
         </div>
-        {persons.length < 6 && (
+        {persons.length < maxPersons ? (
           <button
             type="button"
             onClick={addPerson}
@@ -194,7 +217,15 @@ export default function GroupSetup({
           >
             + Add person
           </button>
-        )}
+        ) : !isPro ? (
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="mt-3 w-full px-3 py-3 text-xs border border-dashed border-accent rounded-[14px] text-accent hover:bg-orange-50 transition-colors"
+          >
+            🔒 Go Pro to add more than {FREE_MAX_PERSONS} people
+          </button>
+        ) : null}
       </div>
 
       {/* Find button */}

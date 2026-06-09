@@ -7,6 +7,7 @@ create table if not exists public.profiles (
   email text,
   display_name text,
   is_pro boolean not null default false,
+  stripe_subscription_id text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -18,6 +19,7 @@ create table if not exists public.user_sessions (
   session_id text not null,
   group_name text,
   suggested_area text,
+  session_data jsonb,
   created_at timestamptz not null default now(),
   unique (user_id, session_id)
 );
@@ -66,6 +68,10 @@ create policy "Users can view own sessions"
 create policy "Users can insert own sessions"
   on public.user_sessions for insert
   with check (auth.uid() = user_id);
+
+create policy "Users can update own sessions"
+  on public.user_sessions for update
+  using (auth.uid() = user_id);
 
 create policy "Users can delete own sessions"
   on public.user_sessions for delete

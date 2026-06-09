@@ -6,7 +6,7 @@ import uuid
 import boto3
 from botocore.exceptions import ClientError
 
-from backend import dynamo, exa_search, location
+from backend import dynamo, exa_search, location, travel
 from backend.aws_config import REGION, VERIFY_SSL
 from backend.models import AgentResponse, GroupRequest, RefineRequest, RestaurantResult
 
@@ -69,6 +69,8 @@ DAY: {request.day}
 IMPORTANT — MEAL TYPE CONTEXT:
 - If meal type is "lunch" or "dinner": recommend proper sit-down restaurants
   with full meals (rice, mains, sides).
+- If meal type is "dessert": recommend dessert cafés, bakeries, ice cream,
+  waffles, bubble tea dessert spots, or places known for sweets.
 - If meal type is "supper": recommend late-night options, supper spots,
   24-hour eateries, or places open past 10 PM.
 - If meal type is "snack" or "any": include cafés, dessert spots, hawker
@@ -82,17 +84,14 @@ YOUR TASKS:
    Singapore MRT connectivity, not just physical distance.
    Explain in 1-2 sentences.
 
-2. Estimate rough MRT travel time for each person.
-   You know Singapore's MRT network well — use it.
-
-3. From the search results identify the top 3 restaurants
+2. From the search results identify the top 3 restaurants
    satisfying ALL constraints simultaneously:
    - Every person's dietary requirements (non-negotiable)
    - Budget ceiling = the LOWEST budget in the group
    - Must-have amenities
    - Best cuisine overlap across the group
 
-4. For each restaurant extract or infer these tags.
+3. For each restaurant extract or infer these tags.
    Use "unknown" if not clearly mentioned:
    halal-certified | no pork | vegetarian-friendly |
    vegan-friendly | aircon | outdoor seating |
@@ -100,16 +99,16 @@ YOUR TASKS:
    accepts PayNow | cash only | student deal |
    parking | wheelchair accessible
 
-5. Write a 2-sentence review summary:
+4. Write a 2-sentence review summary:
    Sentence 1 = what people love
    Sentence 2 = common complaints
 
-6. Write one sentence: why this restaurant works for
+5. Write one sentence: why this restaurant works for
    THIS specific group.
 
-7. Score 0-100 for group fit.
+6. Score 0-100 for group fit.
 
-8. For each restaurant, provide estimated opening hours if known
+7. For each restaurant, provide estimated opening hours if known
    (e.g. "11:00 AM - 9:00 PM daily" or "Mon-Sat 11am-10pm, closed Sun").
    If not known, use null.
 
@@ -122,9 +121,6 @@ Return ONLY valid JSON, no markdown, no explanation:
 {{
   "suggested_area": "string",
   "area_reason": "string",
-  "travel_summary": {{
-    "person_name": "~X min via [MRT line]"
-  }},
   "restaurants": [
     {{
       "name": "string",
@@ -170,6 +166,8 @@ DAY: {session_data.get('day', 'today')}
 IMPORTANT — MEAL TYPE CONTEXT:
 - If meal type is "lunch" or "dinner": recommend proper sit-down restaurants
   with full meals (rice, mains, sides).
+- If meal type is "dessert": recommend dessert cafés, bakeries, ice cream,
+  waffles, bubble tea dessert spots, or places known for sweets.
 - If meal type is "supper": recommend late-night options, supper spots,
   24-hour eateries, or places open past 10 PM.
 - If meal type is "snack" or "any": include cafés, dessert spots, hawker
@@ -188,9 +186,6 @@ Return ONLY valid JSON, no markdown, no explanation:
 {{
   "suggested_area": "string",
   "area_reason": "string",
-  "travel_summary": {{
-    "person_name": "~X min via [MRT line]"
-  }},
   "restaurants": [
     {{
       "name": "string",
@@ -294,10 +289,7 @@ def _fallback_response(
             f"{midpoint_area} is the geographic midpoint of your group, "
             "offering reasonable MRT access for everyone."
         ),
-        "travel_summary": {
-            name: f"~20-30 min via MRT"
-            for name in names
-        },
+        "travel_summary": {},
         "restaurants": [
             {
                 "name": "Maxwell Food Centre",
@@ -495,6 +487,14 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
         if not warning:
             warning = "AI returned no results — showing generic suggestions."
 
+    travel.apply_travel_summary(
+        parsed,
+        request.persons,
+        midpoint_area,
+        meal_type=request.meal_type,
+        day=request.day,
+    )
+
     session_id = request.session_id or str(uuid.uuid4())
     restaurants = _build_restaurants(parsed, midpoint_area)
 
@@ -590,6 +590,14 @@ async def refine_results(refine_request: RefineRequest) -> AgentResponse:
         parsed = _fallback_response(session, midpoint_area)
         if not warning:
             warning = "AI returned no results — showing generic suggestions."
+
+    travel.apply_travel_summary(
+        parsed,
+        session.get("persons", []),
+        midpoint_area,
+        meal_type=session.get("meal_type", "dinner"),
+        day=session.get("day", "today"),
+    )
 
     # Reuse session ID
     session_id = refine_request.session_id

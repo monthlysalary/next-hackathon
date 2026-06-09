@@ -19,6 +19,7 @@ class GroupRequest(BaseModel):
     persons: list[PersonProfile]
     meal_type: str
     day: str
+    is_pro: bool = False
 
 
 class RefineRequest(BaseModel):
@@ -69,3 +70,11 @@ class VoteStatus(BaseModel):
 class GpsRequest(BaseModel):
     latitude: float
     longitude: float
+
+
+class ConfirmProRequest(BaseModel):
+    checkout_session_id: str
+
+
+class CancelProRequest(BaseModel):
+    subscription_id: str | None = None
