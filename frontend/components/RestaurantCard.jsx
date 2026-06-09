@@ -213,6 +213,23 @@ export default function RestaurantCard({
           >
             Maps
           </a>
+          {restaurant.reservation_url && (
+            <a
+              href={restaurant.reservation_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 text-center py-2.5 rounded-[14px] border border-green-200 text-[12px] font-medium text-green-700 hover:bg-green-50 transition-colors"
+            >
+              🪑 Reserve
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={handleViewMenu}
+            className="flex-1 py-2.5 rounded-[14px] text-[12px] font-medium transition-colors border border-purple-200 text-purple-700 hover:bg-purple-50"
+          >
+            {menuLoading ? '...' : 'Menu'}
+          </button>
           <button
             type="button"
             onClick={handleSave}

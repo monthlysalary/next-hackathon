@@ -210,9 +210,14 @@ export default function AppContent() {
   }, [user, profile?.is_pro])
 
   // Poll votes every 5 seconds when on results view
+  // Poll votes every 15 seconds when on results view and session is shared
   useEffect(() => {
     if (view !== 'results' || !result?.session_id) return
     if (result.session_id === 'demo-session') return
+
+    // Only start polling if the session was loaded via a share link
+    const params = new URLSearchParams(window.location.search)
+    const isSharedSession = params.get('session') === result.session_id
 
     const poll = async () => {
       try {
@@ -227,8 +232,10 @@ export default function AppContent() {
       }
     }
 
+    // Fetch once immediately, then poll only if shared
     poll()
-    const interval = setInterval(poll, 5000)
+    if (!isSharedSession) return
+    const interval = setInterval(poll, 15000)
     return () => clearInterval(interval)
   }, [view, result?.session_id])
 

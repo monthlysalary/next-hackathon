@@ -303,8 +303,49 @@ def search_opening_hours(restaurant_name: str) -> str | None:
     return None
 
 
+RESERVATION_DOMAINS = [
+    "chope.co",
+    "quandoo.sg",
+    "hungrygowhere.com",
+    "oddle.me",
+    "inline.app",
+    "tablecheck.com",
+]
+
+
+def search_reservation_url(restaurant_name: str) -> str | None:
+    """Search for a restaurant's actual reservation/booking URL via Exa."""
+    query = f"{restaurant_name} Singapore book reserve table chope"
+    results = search_with_cache(
+        query,
+        num_results=5,
+        include_domains=RESERVATION_DOMAINS,
+    )
+
+    for r in results:
+        url = r.get("url", "")
+        title = r.get("title", "").lower()
+        text = r.get("text", "").lower()
+        restaurant_lower = restaurant_name.lower()
+
+        # Check if this result is actually about this restaurant
+        name_parts = restaurant_lower.split()
+        # At least the first significant word of the restaurant name should appear
+        relevant = any(
+            part in title or part in text
+            for part in name_parts
+            if len(part) > 3
+        )
+
+        if relevant and any(domain in url for domain in RESERVATION_DOMAINS):
+            return url
+
+    # No direct match found — don't return a generic search URL
+    return None
+
+
 def search_menu(restaurant_name: str) -> dict | None:
-    """Search for a restaurant's menu items and prices via Exa (Pro feature)."""
+    """Search for a restaurant's menu items and prices via Exa, then use Bedrock to extract a clean menu."""
     query = f"{restaurant_name} Singapore menu prices"
     results = search_with_cache(
         query,
@@ -315,58 +356,83 @@ def search_menu(restaurant_name: str) -> dict | None:
     if not results:
         return None
 
-    # Extract menu-like content from search results
-    menu_items = []
+    # Combine raw text from search results
+    raw_text = ""
     source_url = None
-
     for r in results:
         text = r.get("text", "")
         url = r.get("url", "")
-        if not text:
-            continue
+        if text:
+            raw_text += text + "\n\n"
+            if not source_url:
+                source_url = url
 
-        if not source_url:
-            source_url = url
-
-        # Look for lines that might be menu items (contain $ or price patterns)
-        lines = text.split("\n")
-        for line in lines:
-            line = line.strip()
-            if not line or len(line) < 5 or len(line) > 200:
-                continue
-            # Lines with $ signs or "S$" are likely menu items
-            if "$" in line or any(
-                kw in line.lower()
-                for kw in ["per pax", "per person", "set meal", "ala carte"]
-            ):
-                menu_items.append(line)
-            # Also grab lines that look like dish names (capitalized, reasonable length)
-            elif (
-                len(line) > 8
-                and len(line) < 80
-                and not line.startswith("http")
-                and any(c.isupper() for c in line[:3])
-            ):
-                menu_items.append(line)
-
-        if len(menu_items) >= 15:
-            break
-
-    if not menu_items:
-        # Fallback: return the raw text snippet
-        best_text = results[0].get("text", "")[:500] if results else None
-        if best_text:
-            return {
-                "restaurant_name": restaurant_name,
-                "menu_items": [best_text],
-                "source_url": results[0].get("url", ""),
-                "note": "Full menu details may vary. Check the source link for the latest menu.",
-            }
+    if not raw_text.strip():
         return None
 
-    return {
-        "restaurant_name": restaurant_name,
-        "menu_items": menu_items[:15],
-        "source_url": source_url,
-        "note": "Prices may vary. Check the source link for the latest menu.",
-    }
+    # Use Bedrock to extract a clean, accurate menu
+    from backend.agent import _call_bedrock
+
+    prompt = f"""Extract the menu items and prices for "{restaurant_name}" from the following web search results.
+
+RAW SEARCH DATA:
+{raw_text[:3000]}
+
+RULES:
+- Only include items that are clearly from this restaurant's menu
+- Format each item as: "Item Name — S$X.XX" (use Singapore dollars)
+- If a price range applies, use "S$X–Y"
+- Do NOT invent items or prices — only use what's in the data
+- If you cannot find real menu items, return an empty list
+- Maximum 12 items
+- Sort by category (mains first, then sides, drinks, desserts)
+
+Return ONLY valid JSON:
+{{
+  "menu_items": ["Item — S$X.XX", ...],
+  "note": "Brief one-line note about the menu (e.g. price date, special info)"
+}}"""
+
+    try:
+        text = _call_bedrock(prompt)
+        # Parse response
+        import re
+        text = text.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+            text = re.sub(r"\s*```$", "", text)
+        parsed = json.loads(text)
+
+        menu_items = parsed.get("menu_items", [])
+        if not menu_items:
+            return None
+
+        return {
+            "restaurant_name": restaurant_name,
+            "menu_items": menu_items[:12],
+            "source_url": source_url,
+            "note": parsed.get("note", "Prices may vary. Check the source link for the latest menu."),
+        }
+    except Exception as e:
+        print(f"Bedrock menu extraction failed for {restaurant_name}: {e}")
+        # Fallback to raw extraction
+        menu_items = []
+        for r in results:
+            for line in r.get("text", "").split("\n"):
+                line = line.strip()
+                if "$" in line and 5 < len(line) < 200:
+                    menu_items.append(line)
+                if len(menu_items) >= 10:
+                    break
+            if len(menu_items) >= 10:
+                break
+
+        if not menu_items:
+            return None
+
+        return {
+            "restaurant_name": restaurant_name,
+            "menu_items": menu_items[:10],
+            "source_url": source_url,
+            "note": "Raw data — AI cleanup unavailable. Prices may be outdated.",
+        }

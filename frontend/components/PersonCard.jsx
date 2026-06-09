@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import {
   API_URL,
   SINGAPORE_AREAS,
@@ -51,52 +51,59 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
   const [locationError, setLocationError] = useState(null)
   const [gpsLoading, setGpsLoading] = useState(false)
   const [expanded, setExpanded] = useState(index < 2)
+  const debounceRef = useRef(null)
 
   const update = (field, value) => {
     onChange(index, { ...person, [field]: value })
   }
 
-  const handleLocationInput = (value) => {
-    update('location', value)
-    setLocationError(null)
-
-    if (value.length < 1) {
-      setSuggestions([])
-      return
+  const validateLocation = useCallback(async (value) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/validate-location/${encodeURIComponent(value)}`,
+      )
+      if (res.ok) {
+        const data = await res.json()
+        if (data.valid) {
+          setSuggestions([data.area])
+          setLocationError(null)
+        } else if (data.suggestions.length > 0) {
+          setSuggestions(data.suggestions)
+          setLocationError(data.message)
+        } else {
+          const filtered = SINGAPORE_AREAS.filter((a) =>
+            a.toLowerCase().includes(value.toLowerCase()),
+          )
+          setSuggestions(filtered.slice(0, 4))
+          setLocationError(filtered.length === 0 ? data.message : null)
+        }
+        return
+      }
+    } catch {
+      // Backend unavailable — fall back to local filter
     }
-
-    // Fast local filter first (no network, instant)
     const filtered = SINGAPORE_AREAS.filter((a) =>
       a.toLowerCase().includes(value.toLowerCase()),
     )
+    setSuggestions(filtered.slice(0, 4))
+    setLocationError(null)
+  }, [])
 
-    if (filtered.length > 0) {
+  const handleLocationInput = (value) => {
+    update('location', value)
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    if (value.length >= 2) {
+      // Local filter immediately for snappy UX
+      const filtered = SINGAPORE_AREAS.filter((a) =>
+        a.toLowerCase().includes(value.toLowerCase()),
+      )
       setSuggestions(filtered.slice(0, 4))
-      return
-    }
+      setLocationError(null)
 
-    // Only hit backend for fuzzy match if local filter found nothing
-    // and input is long enough to be meaningful
-    if (value.length >= 3) {
-      // Debounce: use a timeout to avoid hammering the API
-      clearTimeout(window._locationTimeout)
-      window._locationTimeout = setTimeout(async () => {
-        try {
-          const res = await fetch(
-            `${API_URL}/validate-location/${encodeURIComponent(value)}`,
-          )
-          if (res.ok) {
-            const data = await res.json()
-            if (data.valid) {
-              setSuggestions([data.area])
-            } else if (data.suggestions.length > 0) {
-              setSuggestions(data.suggestions)
-              setLocationError(data.message)
-            }
-          }
-        } catch {
-          // Backend unavailable — no suggestions
-        }
+      // Debounced backend call for fuzzy matching
+      debounceRef.current = setTimeout(() => {
+        validateLocation(value)
       }, 300)
     } else {
       setSuggestions([])
