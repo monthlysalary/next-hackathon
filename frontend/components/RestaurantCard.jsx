@@ -3,6 +3,34 @@
 import { useState } from 'react'
 import { API_URL } from '@/lib/constants'
 
+// Curated Unsplash food images by cuisine type (direct CDN links, no API key needed)
+const CUISINE_IMAGES = {
+  chinese: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=400&h=200&fit=crop&q=80',
+  malay: 'https://images.unsplash.com/photo-1562565652-a0d8f0c59eb4?w=400&h=200&fit=crop&q=80',
+  indian: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&h=200&fit=crop&q=80',
+  western: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&h=200&fit=crop&q=80',
+  japanese: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&h=200&fit=crop&q=80',
+  korean: 'https://images.unsplash.com/photo-1590301157890-4810ed352733?w=400&h=200&fit=crop&q=80',
+  thai: 'https://images.unsplash.com/photo-1562565652-a0d8f0c59eb4?w=400&h=200&fit=crop&q=80',
+  hawker: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=200&fit=crop&q=80',
+  vegetarian: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=200&fit=crop&q=80',
+  seafood: 'https://images.unsplash.com/photo-1615141982883-c7ad0e69fd62?w=400&h=200&fit=crop&q=80',
+  default: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=200&fit=crop&q=80',
+}
+
+function getCuisineImage(cuisine) {
+  if (!cuisine) return CUISINE_IMAGES.default
+  const lower = cuisine.toLowerCase()
+  for (const [key, url] of Object.entries(CUISINE_IMAGES)) {
+    if (lower.includes(key)) return url
+  }
+  // Check for nasi padang / malay variants
+  if (lower.includes('nasi') || lower.includes('padang')) return CUISINE_IMAGES.malay
+  if (lower.includes('south indian') || lower.includes('north indian')) return CUISINE_IMAGES.indian
+  if (lower.includes('mixed') || lower.includes('food centre')) return CUISINE_IMAGES.hawker
+  return CUISINE_IMAGES.default
+}
+
 const DIETARY_KEYWORDS = [
   'halal',
   'vegetarian',
@@ -56,6 +84,11 @@ export default function RestaurantCard({
   const [isSaved, setIsSaved] = useState(saved)
   const [imgError, setImgError] = useState(false)
 
+  // Determine best image: use photo_url if provided, otherwise cuisine-based Unsplash image
+  const imageUrl = (restaurant.photo_url && !imgError)
+    ? restaurant.photo_url
+    : getCuisineImage(restaurant.cuisine)
+
   const handleSave = async () => {
     if (isSaved || saving) return
     setSaving(true)
@@ -78,15 +111,6 @@ export default function RestaurantCard({
         ? 'bg-orange-50 text-accent'
         : 'bg-surface-raised text-text-secondary'
 
-  // Generate a placeholder gradient for restaurants without photos
-  const placeholderGradients = [
-    'from-orange-200 to-amber-100',
-    'from-blue-200 to-indigo-100',
-    'from-green-200 to-emerald-100',
-    'from-purple-200 to-pink-100',
-  ]
-  const gradient = placeholderGradients[(rank - 1) % placeholderGradients.length]
-
   return (
     <div
       className={`bg-white border rounded-[20px] overflow-hidden shadow-card ${
@@ -95,20 +119,12 @@ export default function RestaurantCard({
     >
       {/* Photo / Header image */}
       <div className="relative h-[120px] overflow-hidden">
-        {restaurant.photo_url && !imgError ? (
-          <img
-            src={restaurant.photo_url}
-            alt={restaurant.name}
-            className="w-full h-full object-cover"
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <div
-            className={`w-full h-full bg-gradient-to-br ${gradient} flex items-center justify-center`}
-          >
-            <span className="text-3xl opacity-50">🍽️</span>
-          </div>
-        )}
+        <img
+          src={imageUrl}
+          alt={restaurant.name}
+          className="w-full h-full object-cover"
+          onError={() => setImgError(true)}
+        />
         {/* Rank badge */}
         <div className="absolute top-3 left-3 w-8 h-8 rounded-full bg-accent text-white text-sm font-bold flex items-center justify-center shadow-lg">
           {rank}
