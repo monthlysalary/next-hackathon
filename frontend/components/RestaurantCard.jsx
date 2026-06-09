@@ -83,11 +83,21 @@ export default function RestaurantCard({
   const [saving, setSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(saved)
   const [imgError, setImgError] = useState(false)
+  const [menuLoading, setMenuLoading] = useState(false)
 
   // Determine best image: use photo_url if provided, otherwise cuisine-based Unsplash image
   const imageUrl = (restaurant.photo_url && !imgError)
     ? restaurant.photo_url
     : getCuisineImage(restaurant.cuisine)
+
+  const handleViewMenu = () => {
+    if (restaurant.menu_url) {
+      window.open(restaurant.menu_url, '_blank', 'noopener,noreferrer')
+    } else if (restaurant.maps_url) {
+      // Fallback: open Google Maps which often has menu info
+      window.open(restaurant.maps_url, '_blank', 'noopener,noreferrer')
+    }
+  }
 
   const handleSave = async () => {
     if (isSaved || saving) return

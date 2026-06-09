@@ -11,7 +11,7 @@ import {
   DEMO_PERSONS,
   DEMO_RESULT,
 } from '@/lib/constants'
-import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro } from '@/lib/userDb'
+import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro, deleteUserSession } from '@/lib/userDb'
 import {
   FREE_MAX_PERSONS,
   PRO_MAX_PERSONS,
@@ -120,6 +120,14 @@ export default function AppContent() {
       setError(e.message || 'Could not load session')
     } finally {
       setLoadingSessionId(null)
+    }
+  }
+
+  const handleDeleteSession = async (sessionId) => {
+    if (!user) return
+    const { error: err } = await deleteUserSession(user.id, sessionId)
+    if (!err) {
+      setUserSessions((prev) => prev.filter((s) => s.session_id !== sessionId))
     }
   }
 
@@ -571,6 +579,7 @@ export default function AppContent() {
           hasSavedSession={hasSavedSession}
           userSessions={userSessions}
           onLoadUserSession={loadSession}
+          onDeleteUserSession={handleDeleteSession}
           loadingSessionId={loadingSessionId}
           isSignedIn={Boolean(user)}
           onSignIn={() => setAuthOpen(true)}

@@ -20,6 +20,7 @@ export default function GroupSetup({
   hasSavedSession,
   userSessions = [],
   onLoadUserSession,
+  onDeleteUserSession,
   loadingSessionId,
   isSignedIn = false,
   onSignIn,
@@ -95,24 +96,37 @@ export default function GroupSetup({
           </label>
           <div className="space-y-2">
             {userSessions.map((session) => (
-              <button
+              <div
                 key={session.id}
-                type="button"
-                onClick={() => onLoadUserSession?.(session.session_id)}
-                disabled={loadingSessionId === session.session_id}
-                className="w-full text-left px-3.5 py-3 bg-surface-raised border border-border rounded-[14px] hover:border-accent transition-colors disabled:opacity-60"
+                className="flex items-center gap-2"
               >
-                <p className="text-sm font-medium text-text-primary truncate">
-                  {session.group_name || 'Dining session'}
-                </p>
-                <p className="text-[11px] text-text-secondary mt-0.5">
-                  {session.suggested_area || 'Area TBD'}
-                  {session.created_at
-                    ? ` · ${new Date(session.created_at).toLocaleDateString()}`
-                    : ''}
-                  {loadingSessionId === session.session_id ? ' · Loading…' : ''}
-                </p>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onLoadUserSession?.(session.session_id)}
+                  disabled={loadingSessionId === session.session_id}
+                  className="flex-1 text-left px-3.5 py-3 bg-surface-raised border border-border rounded-[14px] hover:border-accent transition-colors disabled:opacity-60"
+                >
+                  <p className="text-sm font-medium text-text-primary truncate">
+                    {session.group_name || 'Dining session'}
+                  </p>
+                  <p className="text-[11px] text-text-secondary mt-0.5">
+                    {session.suggested_area || 'Area TBD'}
+                    {session.created_at
+                      ? ` · ${new Date(session.created_at).toLocaleDateString()}`
+                      : ''}
+                    {loadingSessionId === session.session_id ? ' · Loading…' : ''}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeleteUserSession?.(session.session_id)}
+                  className="p-2 rounded-full hover:bg-red-50 text-text-secondary hover:text-red-500 transition-colors"
+                  title="Delete session"
+                  aria-label={`Delete session ${session.group_name || 'Dining session'}`}
+                >
+                  🗑️
+                </button>
+              </div>
             ))}
           </div>
         </div>
