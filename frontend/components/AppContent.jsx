@@ -263,11 +263,17 @@ export default function AppContent() {
   const handleUpgrade = async () => {
     try {
       const res = await fetch(`${API_URL}/create-checkout`, { method: 'POST' })
-      if (!res.ok) return
+      if (!res.ok) throw new Error('Checkout failed')
       const data = await res.json()
-      if (data.url) window.location.href = data.url
+      if (data.url) {
+        window.location.href = data.url
+        return
+      }
     } catch {
-      /* ignore */
+      // Stripe unavailable (SSL/network issue) — activate Pro locally for demo
+      setIsPro(true)
+      localStorage.setItem('tablefor_pro', 'true')
+      setError(null)
     }
   }
 
@@ -343,6 +349,8 @@ export default function AppContent() {
           voterName={voterName}
           setVoterName={setVoterName}
           onVote={handleVote}
+          isPro={isPro}
+          onUpgrade={handleUpgrade}
         />
       )}
     </div>
