@@ -1,0 +1,135 @@
+
+<div style="background: #f5ede8; min-height: 760px; display: flex; align-items: center; justify-content: center; padding: 2rem 0;">
+  <div style="background: #fdf6f0; width: 340px; border-radius: 40px; padding: 2rem 1.5rem 1.75rem; border: 1px solid #ecddd6;">
+
+    <h1 style="font-size: 26px; font-weight: 800; color: #1a1a1a; margin: 0 0 8px; letter-spacing: -0.5px;">Dietary Restrictions</h1>
+    <p style="font-size: 14px; color: #999; margin: 0 0 1.75rem; line-height: 1.5;">Help your friends accommodate your dining needs and preferences.</p>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem;">
+
+      <!-- Gluten Free -->
+      <div onclick="toggle(this)" style="background: white; border-radius: 18px; border: 1.5px solid #ecddd6; padding: 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer; transition: border-color 0.15s;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: #fff5ef; display: flex; align-items: center; justify-content: center;">
+          <svg width="34" height="34" viewBox="0 0 100 100" fill="none">
+            <!-- bread loaf -->
+            <rect x="18" y="42" width="64" height="34" rx="10" fill="#c87533"/>
+            <ellipse cx="50" cy="42" rx="32" ry="14" fill="#e8913d"/>
+            <ellipse cx="50" cy="40" rx="28" ry="11" fill="#f0a84a"/>
+            <!-- slash -->
+            <line x1="20" y1="20" x2="80" y2="80" stroke="#e05a20" stroke-width="7" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span style="font-size: 13px; font-weight: 600; color: #1a1a1a;">Gluten Free</span>
+      </div>
+
+      <!-- Dairy Free -->
+      <div onclick="toggle(this)" style="background: white; border-radius: 18px; border: 1.5px solid #F28155; padding: 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: #eef5fb; display: flex; align-items: center; justify-content: center;">
+          <svg width="34" height="34" viewBox="0 0 100 100" fill="none">
+            <!-- milk carton -->
+            <rect x="30" y="38" width="40" height="42" rx="4" fill="#c8dce8"/>
+            <polygon points="30,38 50,22 70,38" fill="#a8c4d4"/>
+            <rect x="34" y="50" width="32" height="4" rx="2" fill="white" opacity="0.5"/>
+            <text x="50" y="48" font-size="10" text-anchor="middle" fill="#6a9ab0" font-family="sans-serif" font-weight="bold">MILK</text>
+            <!-- slash -->
+            <line x1="20" y1="20" x2="80" y2="80" stroke="#e05a20" stroke-width="7" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span style="font-size: 13px; font-weight: 600; color: #1a1a1a;">Dairy Free</span>
+      </div>
+
+      <!-- Vegetarian -->
+      <div onclick="toggle(this)" style="background: white; border-radius: 18px; border: 1.5px solid #ecddd6; padding: 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: #edf7f0; display: flex; align-items: center; justify-content: center;">
+          <svg width="36" height="36" viewBox="0 0 100 100" fill="none">
+            <!-- bowl -->
+            <ellipse cx="50" cy="68" rx="36" ry="10" fill="#7ec8b8"/>
+            <path d="M14 60 Q14 82 50 82 Q86 82 86 60 Z" fill="#8ecfbf"/>
+            <ellipse cx="50" cy="60" rx="36" ry="10" fill="#a8ddd0"/>
+            <!-- salad contents -->
+            <ellipse cx="38" cy="56" rx="10" ry="7" fill="#4a9e6a"/>
+            <ellipse cx="55" cy="54" rx="9" ry="6" fill="#5db07a"/>
+            <ellipse cx="48" cy="50" rx="8" ry="5" fill="#66bb85"/>
+            <circle cx="44" cy="54" r="5" fill="#e84040"/>
+            <circle cx="60" cy="57" r="4" fill="#e84040"/>
+            <rect cx="52" cy="52" width="6" height="4" rx="2" fill="white" opacity="0.7"/>
+          </svg>
+        </div>
+        <span style="font-size: 13px; font-weight: 600; color: #1a1a1a;">Vegetarian</span>
+      </div>
+
+      <!-- Pescatarian -->
+      <div onclick="toggle(this)" style="background: white; border-radius: 18px; border: 1.5px solid #ecddd6; padding: 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: #eef3fb; display: flex; align-items: center; justify-content: center;">
+          <svg width="38" height="38" viewBox="0 0 100 100" fill="none">
+            <!-- fish body -->
+            <ellipse cx="46" cy="50" rx="28" ry="16" fill="#7fa8cc"/>
+            <ellipse cx="46" cy="50" rx="24" ry="12" fill="#8fbedd"/>
+            <!-- tail -->
+            <polygon points="75,50 88,38 88,62" fill="#6a94bb"/>
+            <!-- eye -->
+            <circle cx="28" cy="46" r="4" fill="white"/>
+            <circle cx="27" cy="46" r="2" fill="#1a3a5c"/>
+            <!-- scales -->
+            <path d="M50 42 Q58 46 50 50" stroke="#5a88b0" stroke-width="1.5" fill="none"/>
+            <path d="M58 44 Q66 48 58 52" stroke="#5a88b0" stroke-width="1.5" fill="none"/>
+            <!-- fin -->
+            <path d="M40 38 Q50 30 60 38" stroke="#6a94bb" stroke-width="2.5" fill="none"/>
+          </svg>
+        </div>
+        <span style="font-size: 13px; font-weight: 600; color: #1a1a1a;">Pescatarian</span>
+      </div>
+
+      <!-- Halal -->
+      <div onclick="toggle(this)" style="background: white; border-radius: 18px; border: 1.5px solid #ecddd6; padding: 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: #eef8f2; display: flex; align-items: center; justify-content: center;">
+          <svg width="36" height="36" viewBox="0 0 100 100" fill="none">
+            <!-- 8-pointed star (halal badge shape) -->
+            <polygon points="50,10 58,35 82,28 65,48 88,58 63,62 68,88 50,72 32,88 37,62 12,58 35,48 18,28 42,35" fill="url(#halalGrad)"/>
+            <defs>
+              <linearGradient id="halalGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#5ecb7a"/>
+                <stop offset="100%" stop-color="#2e9e52"/>
+              </linearGradient>
+            </defs>
+            <text x="50" y="53" font-size="11" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="bold">حلال</text>
+            <text x="50" y="64" font-size="7" text-anchor="middle" fill="white" font-family="sans-serif" letter-spacing="1">HALAL</text>
+          </svg>
+        </div>
+        <span style="font-size: 13px; font-weight: 600; color: #1a1a1a;">Halal</span>
+      </div>
+
+      <!-- Kosher -->
+      <div onclick="toggle(this)" style="background: white; border-radius: 18px; border: 1.5px solid #ecddd6; padding: 1.25rem 1rem; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer;">
+        <div style="width: 56px; height: 56px; border-radius: 50%; background: #eff2fb; display: flex; align-items: center; justify-content: center;">
+          <svg width="36" height="36" viewBox="0 0 100 100" fill="none">
+            <!-- Star of David -->
+            <polygon points="50,12 62,34 86,34 68,52 76,76 50,62 24,76 32,52 14,34 38,34" fill="none" stroke="#3a6fcc" stroke-width="3"/>
+            <polygon points="50,88 38,66 14,66 32,48 24,24 50,38 76,24 68,48 86,66 62,66" fill="none" stroke="#3a6fcc" stroke-width="3"/>
+            <!-- decorative dots -->
+            <circle cx="50" cy="8" r="2.5" fill="#c8a835"/>
+            <circle cx="92" cy="50" r="2.5" fill="#c8a835"/>
+            <circle cx="50" cy="92" r="2.5" fill="#c8a835"/>
+            <circle cx="8" cy="50" r="2.5" fill="#c8a835"/>
+          </svg>
+        </div>
+        <span style="font-size: 13px; font-weight: 600; color: #1a1a1a;">Kosher</span>
+      </div>
+
+    </div>
+
+    <button style="width: 100%; background: #F28155; color: white; border: none; border-radius: 16px; height: 54px; font-size: 16px; font-weight: 700; cursor: pointer; margin-bottom: 1rem;">
+      Save Preferences
+    </button>
+
+    <p style="text-align: center; font-size: 14px; color: #bbb; margin: 0; cursor: pointer;">Go Back</p>
+
+  </div>
+</div>
+
+<script>
+function toggle(el) {
+  const isSelected = el.style.borderColor === 'rgb(242, 129, 85)';
+  el.style.borderColor = isSelected ? '#ecddd6' : '#F28155';
+}
+</script>
