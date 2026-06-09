@@ -3,12 +3,15 @@
 import { useState, useEffect } from 'react'
 import GroupSetup from './GroupSetup'
 import ResultsPanel from './ResultsPanel'
+import AuthModal from './AuthModal'
+import { useAuth } from './AuthProvider'
 import {
   API_URL,
   EMPTY_PERSON,
   DEMO_PERSONS,
   DEMO_RESULT,
 } from '@/lib/constants'
+import { fetchUserSessions, saveUserSession } from '@/lib/userDb'
 
 const SESSION_KEY = 'tablefor_session_id'
 const VOTER_KEY = 'tablefor_voter_name'
@@ -34,6 +37,7 @@ const MUST_HAVE_MAP = {
 }
 
 export default function AppContent() {
+  const { user, profile, signOut, configured: authConfigured } = useAuth()
   const [view, setView] = useState('setup')
   const [groupName, setGroupName] = useState('Our Group')
   const [mealType, setMealType] = useState('dinner')
@@ -48,9 +52,56 @@ export default function AppContent() {
   const [savedRestaurants, setSavedRestaurants] = useState([])
   const [isPro, setIsPro] = useState(false)
   const [hasSavedSession, setHasSavedSession] = useState(false)
+  const [authOpen, setAuthOpen] = useState(false)
+  const [userSessions, setUserSessions] = useState([])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('upgraded') === 'true') {
+      setIsPro(true)
+      localStorage.setItem('tablefor_pro', 'true')
+    } else if (localStorage.getItem('tablefor_pro') === 'true') {
+      setIsPro(true)
+    }
+
+    const sessionId =
+      params.get('session') || localStorage.getItem(SESSION_KEY)
+    if (sessionId) {
+      setHasSavedSession(true)
+      if (params.get('session')) {
+        loadSession(sessionId)
+      }
+    }
+  }, [])
   const [voterName, setVoterName] = useState('')
   const [votes, setVotes] = useState({})
   const [voters, setVoters] = useState([])
+
+  useEffect(() => {
+    if (!user) {
+      setUserSessions([])
+      return
+    }
+    fetchUserSessions(user.id).then(setUserSessions)
+  }, [user])
+
+  useEffect(() => {
+    if (profile?.is_pro) {
+      setIsPro(true)
+      localStorage.setItem('tablefor_pro', 'true')
+    }
+  }, [profile])
+
+  const persistSessionForUser = async (data) => {
+    if (!user || !data?.session_id) return
+    await saveUserSession(user.id, {
+      session_id: data.session_id,
+      group_name: data.group_name || groupName,
+      suggested_area: data.suggested_area,
+    })
+    const sessions = await fetchUserSessions(user.id)
+    setUserSessions(sessions)
+  }
 
   const loadSession = async (sessionId) => {
     try {
@@ -160,6 +211,7 @@ export default function AppContent() {
       localStorage.setItem(SESSION_KEY, data.session_id)
       setHasSavedSession(true)
       setSavedRestaurants([])
+      await persistSessionForUser(data)
       setVotes({})
       setVoters([])
       setView('results')
@@ -285,17 +337,41 @@ export default function AppContent() {
               </span>
             )}
           </div>
-          {!isPro && (
-            <button
-              type="button"
-              onClick={handleUpgrade}
-              className="px-2.5 py-1 text-[10px] font-medium bg-accent hover:bg-accent-hover text-white rounded-full transition-colors"
-            >
-              Go Pro
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {authConfigured && (
+              user ? (
+                <button
+                  type="button"
+                  onClick={signOut}
+                  className="px-2.5 py-1 text-[10px] font-medium border border-border rounded-full text-text-secondary hover:text-text-primary transition-colors"
+                  title={profile?.email || user.email}
+                >
+                  {profile?.display_name || 'Account'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAuthOpen(true)}
+                  className="px-2.5 py-1 text-[10px] font-medium border border-border rounded-full text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  Sign in
+                </button>
+              )
+            )}
+            {!isPro && (
+              <button
+                type="button"
+                onClick={handleUpgrade}
+                className="px-2.5 py-1 text-[10px] font-medium bg-accent hover:bg-accent-hover text-white rounded-full transition-colors"
+              >
+                Go Pro
+              </button>
+            )}
+          </div>
         </div>
       </header>
+
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
 
       {error && (
         <div className="px-4 pt-3">
@@ -320,6 +396,10 @@ export default function AppContent() {
           loading={loading}
           onContinueSession={handleContinueSession}
           hasSavedSession={hasSavedSession}
+          userSessions={userSessions}
+          onLoadUserSession={loadSession}
+          isSignedIn={Boolean(user)}
+          onSignIn={() => setAuthOpen(true)}
         />
       ) : (
         <ResultsPanel

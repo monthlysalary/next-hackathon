@@ -17,6 +17,10 @@ export default function GroupSetup({
   loading,
   onContinueSession,
   hasSavedSession,
+  userSessions = [],
+  onLoadUserSession,
+  isSignedIn = false,
+  onSignIn,
 }) {
   const updatePerson = (index, person) => {
     const next = [...persons]
@@ -62,6 +66,44 @@ export default function GroupSetup({
           Try demo
         </button>
       </div>
+
+      {isSignedIn && userSessions.length > 0 && (
+        <div className="mb-5">
+          <label className="block text-[14px] font-medium text-text-primary mb-2">
+            Your saved sessions
+          </label>
+          <div className="space-y-2">
+            {userSessions.map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                onClick={() => onLoadUserSession?.(session.session_id)}
+                className="w-full text-left px-3.5 py-3 bg-surface-raised border border-border rounded-[14px] hover:border-accent transition-colors"
+              >
+                <p className="text-sm font-medium text-text-primary truncate">
+                  {session.group_name || 'Dining session'}
+                </p>
+                <p className="text-[11px] text-text-secondary mt-0.5">
+                  {session.suggested_area || 'Area TBD'}
+                  {session.created_at
+                    ? ` · ${new Date(session.created_at).toLocaleDateString()}`
+                    : ''}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isSignedIn && onSignIn && (
+        <button
+          type="button"
+          onClick={onSignIn}
+          className="w-full mb-5 px-3 py-3 text-xs bg-surface border border-border rounded-[14px] text-text-secondary hover:border-accent hover:text-text-primary transition-colors"
+        >
+          Sign in to save sessions to your account
+        </button>
+      )}
 
       {/* Occasion */}
       <div className="mb-4">
