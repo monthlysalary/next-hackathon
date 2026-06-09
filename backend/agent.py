@@ -113,6 +113,11 @@ YOUR TASKS:
    (e.g. "11:00 AM - 9:00 PM daily" or "Mon-Sat 11am-10pm, closed Sun").
    If not known, use null.
 
+9. For each restaurant, indicate whether it accepts reservations.
+   Hawker centres, food courts, and casual takeaway stalls do NOT accept reservations.
+   Sit-down restaurants with table service typically DO accept reservations.
+   Set to true only if you are reasonably confident. If unsure, set to false.
+
 Return ONLY valid JSON, no markdown, no explanation:
 {{
   "suggested_area": "string",
@@ -136,7 +141,8 @@ Return ONLY valid JSON, no markdown, no explanation:
       "latitude": null,
       "longitude": null,
       "match_score": 85,
-      "opening_hours": "string or null"
+      "opening_hours": "string or null",
+      "accepts_reservations": true
     }}
   ]
 }}"""
@@ -201,7 +207,8 @@ Return ONLY valid JSON, no markdown, no explanation:
       "latitude": null,
       "longitude": null,
       "match_score": 85,
-      "opening_hours": "string or null"
+      "opening_hours": "string or null",
+      "accepts_reservations": true
     }}
   ]
 }}"""
@@ -313,6 +320,7 @@ def _fallback_response(
                 "longitude": None,
                 "match_score": 75,
                 "opening_hours": "8:00 AM - 10:00 PM daily",
+                "accepts_reservations": False,
             },
             {
                 "name": "Komala Vilas",
@@ -340,6 +348,7 @@ def _fallback_response(
                 "longitude": None,
                 "match_score": 80,
                 "opening_hours": "7:00 AM - 10:30 PM daily",
+                "accepts_reservations": False,
             },
             {
                 "name": "Hjh Maimunah Restaurant",
@@ -367,6 +376,8 @@ def _fallback_response(
                 "longitude": None,
                 "match_score": 85,
                 "opening_hours": "Mon-Sat 7:00 AM - 8:00 PM, closed Sun",
+                "accepts_reservations": True,
+                "reservation_url": "https://www.chope.co/singapore-restaurants/search?q=Hjh+Maimunah",
             },
         ],
     }
@@ -394,13 +405,14 @@ def _build_restaurants(parsed: dict, midpoint_area: str) -> list[RestaurantResul
             match_score=r.get("match_score", 70),
             photo_url=r.get("photo_url"),
             opening_hours=r.get("opening_hours"),
+            reservation_url=r.get("reservation_url"),
         )
         for r in parsed.get("restaurants", [])
     ]
 
 
 def _enrich_restaurants(parsed: dict) -> None:
-    """Add photo URLs and opening hours to restaurant results."""
+    """Add photo URLs, opening hours, and reservation links to restaurant results."""
     for restaurant in parsed.get("restaurants", []):
         name = restaurant.get("name", "")
         if not name:
@@ -423,6 +435,12 @@ def _enrich_restaurants(parsed: dict) -> None:
             hours = exa_search.search_opening_hours(name)
             if hours:
                 restaurant["opening_hours"] = hours
+
+        # Search for reservation URL only if the AI says it accepts reservations
+        if restaurant.get("accepts_reservations") and not restaurant.get("reservation_url"):
+            reservation_url = exa_search.search_reservation_url(name)
+            if reservation_url:
+                restaurant["reservation_url"] = reservation_url
 
 
 async def run_agent(request: GroupRequest) -> AgentResponse:

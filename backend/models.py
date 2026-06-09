@@ -49,6 +49,7 @@ class RestaurantResult(BaseModel):
     match_score: int
     photo_url: str | None = None
     opening_hours: str | None = None
+    reservation_url: str | None = None
 
 
 class AgentResponse(BaseModel):
