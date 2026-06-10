@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   background-color: #fdf6f0;
@@ -10,19 +15,67 @@ body {
     Ubuntu, Cantarell, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
-  height: 100vh;
+  height: 100%;
+  min-height: 100dvh;
+}
+
+.tablefor-app-bg {
+  background-color: #fdf6f0;
+  background-image: url('/tablefor-bg.png');
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+@media (min-width: 768px) {
+  .tablefor-app-bg {
+    background-attachment: fixed;
+  }
+}
+
+/* Single scroll container inside the app shell */
+.phone-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #f28155 #f5ede8;
 }
 
 /* Phone frame scrollbar inside the app */
 .phone-scroll::-webkit-scrollbar {
-  width: 4px;
+  width: 10px;
 }
+
 .phone-scroll::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(245, 237, 232, 0.95);
+  border-left: 1px solid #e8ddd8;
 }
+
 .phone-scroll::-webkit-scrollbar-thumb {
-  background: #e8ddd8;
-  border-radius: 4px;
+  background: linear-gradient(180deg, #f28155 0%, #e06d3f 100%);
+  border-radius: 999px;
+  border: 2px solid rgba(245, 237, 232, 0.95);
+  min-height: 48px;
+}
+
+.phone-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #e06d3f 0%, #c95a30 100%);
+}
+
+.phone-scroll::-webkit-scrollbar-thumb:active {
+  background: #c95a30;
+}
+
+/* Safe area for notched phones */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .phone-scroll {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .app-header-safe {
+    padding-top: env(safe-area-inset-top);
+  }
 }
 
 /* Mapbox overrides */

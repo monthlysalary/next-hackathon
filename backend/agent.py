@@ -93,7 +93,10 @@ YOUR TASKS:
    - Budget ceiling = the LOWEST budget in the group
      (< S$5 = hawker/coffee shop, < S$10 = casual, S$10–20 = mid-range, etc.)
    - Must-have amenities
-   - Best cuisine overlap across the group
+   - Best cuisine overlap across the group — strongly prefer restaurants
+     whose cuisine matches each person's cuisine_loves (including custom cuisines
+     like Vietnamese). Only pick non-matching cuisines if no good match exists
+     in the search results.
 
 3. For each restaurant extract or infer these tags.
    Use "unknown" if not clearly mentioned:
@@ -504,12 +507,22 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
     )
 
     combined_dietary: list[str] = []
+    combined_cuisines: list[str] = []
     for person in request.persons:
         for d in person.dietary:
             if d.lower() != "none" and d not in combined_dietary:
                 combined_dietary.append(d)
+        for c in person.cuisine_loves:
+            c_lower = c.strip().lower()
+            if c_lower and c_lower != "any" and c_lower not in combined_cuisines:
+                combined_cuisines.append(c_lower)
 
-    exa_results = exa_search.search_restaurants(midpoint_area, combined_dietary, request.meal_type)
+    exa_results = exa_search.search_restaurants(
+        midpoint_area,
+        combined_dietary,
+        request.meal_type,
+        combined_cuisines,
+    )
 
     prompt = _build_prompt(request, midpoint_area, exa_results)
 
@@ -589,12 +602,17 @@ async def refine_results(refine_request: RefineRequest) -> AgentResponse:
     # Get the midpoint area from session
     midpoint_area = session.get("suggested_area", "Bishan")
 
-    # Build dietary list from session persons
+    # Build dietary and cuisine lists from session persons
     combined_dietary: list[str] = []
+    combined_cuisines: list[str] = []
     for person in session.get("persons", []):
         for d in person.get("dietary", []):
             if d.lower() != "none" and d not in combined_dietary:
                 combined_dietary.append(d)
+        for c in person.get("cuisine_loves", []):
+            c_lower = c.strip().lower()
+            if c_lower and c_lower != "any" and c_lower not in combined_cuisines:
+                combined_cuisines.append(c_lower)
 
     # Do a new Exa search incorporating user's feedback
     user_msg = refine_request.message.lower()
@@ -610,13 +628,31 @@ async def refine_results(refine_request: RefineRequest) -> AgentResponse:
     else:
         search_query_extra = refine_request.message[:50]
 
-    dietary_str = " ".join(combined_dietary)
-    query = f"{midpoint_area} Singapore restaurant {dietary_str} {search_query_extra} 2024 2025"
-    exa_results = exa_search.search_with_cache(
-        query,
-        num_results=6,
-        include_domains=exa_search.RESTAURANT_DOMAINS,
+    meal_type = session.get("meal_type", "dinner")
+    exa_results = exa_search.search_restaurants(
+        midpoint_area,
+        combined_dietary,
+        meal_type,
+        combined_cuisines,
     )
+
+    if search_query_extra:
+        dietary_str = " ".join(combined_dietary)
+        extra_query = (
+            f"{midpoint_area} Singapore restaurant {dietary_str} "
+            f"{search_query_extra} 2024 2025"
+        )
+        extra_results = exa_search.search_with_cache(
+            extra_query,
+            num_results=5,
+            include_domains=exa_search.RESTAURANT_DOMAINS,
+        )
+        seen = {r.get("title") for r in exa_results}
+        for r in extra_results:
+            title = r.get("title")
+            if title and title not in seen:
+                seen.add(title)
+                exa_results.append(r)
 
     prompt = _build_refine_prompt(session, refine_request.message, exa_results)
 

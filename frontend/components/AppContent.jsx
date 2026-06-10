@@ -3,7 +3,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import GroupSetup from './GroupSetup'
 import ResultsPanel from './ResultsPanel'
+import SessionHome from './SessionHome'
+import PastSessionsPanel from './PastSessionsPanel'
 import AuthModal from './AuthModal'
+import TableForBrand from './TableForBrand'
 import { useAuth } from './AuthProvider'
 import {
   API_URL,
@@ -61,22 +64,65 @@ const MUST_HAVE_MAP = {
   'Halal-cert': 'halal-certified',
 }
 
-function mergePersonsFromServer(local, remote, preserveIndex) {
+function isPersonEmpty(p) {
+  if (!p) return true
+  return !p.name?.trim() && !p.location?.trim()
+}
+
+function mergePersonSlot(local, remote) {
+  const l = { ...EMPTY_PERSON, ...local }
+  const r = { ...EMPTY_PERSON, ...remote }
+
+  if (isPersonEmpty(r) && !isPersonEmpty(l)) return l
+  if (isPersonEmpty(l) && !isPersonEmpty(r)) return r
+
+  return {
+    ...r,
+    name: l.name?.trim() ? l.name : r.name,
+    location: l.location?.trim() ? l.location : r.location,
+    latitude: l.latitude ?? r.latitude,
+    longitude: l.longitude ?? r.longitude,
+    budget: l.budget || r.budget,
+    dietary: l.dietary?.length ? l.dietary : r.dietary,
+    cuisine_loves: l.cuisine_loves?.length ? l.cuisine_loves : r.cuisine_loves,
+    must_have: l.must_have?.length ? l.must_have : r.must_have,
+    avoid: l.avoid?.length ? l.avoid : r.avoid,
+    notes: l.notes?.trim() ? l.notes : r.notes,
+  }
+}
+
+function mergePersonsFromServer(local, remote, preserveIndex, hostMode = false) {
   const normalized = normalizePersonsFromApi(remote)
-  if (preserveIndex == null) return normalized
-  const merged = [...normalized]
-  while (merged.length <= preserveIndex) {
-    merged.push({ ...EMPTY_PERSON })
+
+  if (preserveIndex != null) {
+    const merged = [...normalized]
+    while (merged.length <= preserveIndex) {
+      merged.push({ ...EMPTY_PERSON })
+    }
+    if (local[preserveIndex]) {
+      merged[preserveIndex] = local[preserveIndex]
+    }
+    return merged
   }
-  if (local[preserveIndex]) {
-    merged[preserveIndex] = local[preserveIndex]
-  }
-  return merged
+
+  if (!hostMode) return normalized
+
+  const maxLen = Math.max(local.length, normalized.length)
+  return Array.from({ length: maxLen }, (_, i) =>
+    mergePersonSlot(local[i], normalized[i]),
+  )
 }
 
 export default function AppContent() {
-  const { user, profile, signOut, configured: authConfigured, refreshProfile } = useAuth()
-  const [view, setView] = useState('setup')
+  const {
+    user,
+    profile,
+    signOut,
+    configured: authConfigured,
+    refreshProfile,
+    loading: authLoading,
+  } = useAuth()
+  const [view, setView] = useState('home')
   const [groupName, setGroupName] = useState('Our Group')
   const [mealType, setMealType] = useState('dinner')
   const [day, setDay] = useState(todayDateString())
@@ -91,6 +137,7 @@ export default function AppContent() {
   const [isPro, setIsPro] = useState(false)
   const [hasSavedSession, setHasSavedSession] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
+  const [needsSignIn, setNeedsSignIn] = useState(false)
   const [userSessions, setUserSessions] = useState([])
   const [loadingSessionId, setLoadingSessionId] = useState(null)
   const [voterName, setVoterName] = useState('')
@@ -101,7 +148,24 @@ export default function AppContent() {
   const [isHost, setIsHost] = useState(true)
   const [joinSlotIndex, setJoinSlotIndex] = useState(null)
   const [inviteCopied, setInviteCopied] = useState(false)
+  const [sessionReady, setSessionReady] = useState(false)
+  const [pendingJoinId, setPendingJoinId] = useState(null)
+  const [setupKey, setSetupKey] = useState(0)
   const groupCreatedRef = useRef(false)
+  const skipResultsRedirectRef = useRef(false)
+  const findInProgressRef = useRef(false)
+  const prevUserRef = useRef(null)
+
+  const clearStoredGroupSession = useCallback((sessionId) => {
+    if (sessionId) {
+      localStorage.removeItem(getHostKey(sessionId))
+      localStorage.removeItem(getJoinSlotKey(sessionId))
+    }
+    const stored = localStorage.getItem(SESSION_KEY)
+    if (!sessionId || stored === sessionId) {
+      localStorage.removeItem(SESSION_KEY)
+    }
+  }, [])
 
   const applyGroupData = useCallback((data) => {
     if (data.persons) setPersons(normalizePersonsFromApi(data.persons))
@@ -157,7 +221,13 @@ export default function AppContent() {
         data = cachedLocal?.session_data
       }
       if (!data) {
-        throw new Error('Group not found or expired. Ask the host for a new link.')
+        if (join) {
+          throw new Error('Group not found or expired. Ask the host for a new link.')
+        }
+        clearStoredGroupSession(sessionId)
+        setGroupSessionId(null)
+        groupCreatedRef.current = false
+        return
       }
 
       if (isGroupSearchComplete(data)) {
@@ -246,18 +316,38 @@ export default function AppContent() {
     const joinId = params.get('join')
     const sessionId = params.get('session') || localStorage.getItem(SESSION_KEY)
 
+    const finishInit = () => setSessionReady(true)
+
     if (joinId) {
-      loadSession(joinId, { join: true })
-    } else if (sessionId) {
+      setPendingJoinId(joinId)
+      finishInit()
+    } else if (params.get('session') && sessionId) {
       setHasSavedSession(true)
-      if (params.get('session')) {
-        loadSession(sessionId)
-      } else if (localStorage.getItem(getHostKey(sessionId)) === 'true') {
-        setGroupSessionId(sessionId)
-        setIsHost(true)
+      loadSession(sessionId).finally(finishInit)
+    } else {
+      if (localStorage.getItem(SESSION_KEY)) {
+        setHasSavedSession(true)
       }
+      setView('home')
+      finishInit()
     }
   }, [])
+
+  // After sign-in, load the invited group session
+  useEffect(() => {
+    if (!pendingJoinId || authLoading || joinMode) return
+
+    if (!authConfigured) {
+      loadSession(pendingJoinId, { join: true })
+      setPendingJoinId(null)
+      return
+    }
+
+    if (user) {
+      loadSession(pendingJoinId, { join: true })
+      setPendingJoinId(null)
+    }
+  }, [pendingJoinId, user, authLoading, authConfigured, joinMode])
 
   useEffect(() => {
     if (!user) {
@@ -266,6 +356,22 @@ export default function AppContent() {
     }
     fetchUserSessions(user.id).then(setUserSessions)
   }, [user])
+
+  useEffect(() => {
+    if (authLoading) return
+
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('session') || params.get('join') || pendingJoinId) {
+      prevUserRef.current = user
+      return
+    }
+
+    const hadUser = prevUserRef.current
+    if (!hadUser && user && !joinMode && view === 'setup') {
+      setView('home')
+    }
+    prevUserRef.current = user
+  }, [user, authLoading, pendingJoinId, joinMode, view])
 
   useEffect(() => {
     if (profile?.is_pro) {
@@ -286,6 +392,7 @@ export default function AppContent() {
 
   // Host: create shareable group session once
   useEffect(() => {
+    if (!sessionReady) return
     const params = new URLSearchParams(window.location.search)
     if (params.get('join')) return
     if (joinMode || groupSessionId || view !== 'setup' || groupCreatedRef.current) return
@@ -300,13 +407,15 @@ export default function AppContent() {
           persons,
         })
         setGroupSessionId(data.session_id)
+        localStorage.setItem(SESSION_KEY, data.session_id)
         localStorage.setItem(getHostKey(data.session_id), 'true')
         setIsHost(true)
+        setHasSavedSession(true)
       } catch {
         groupCreatedRef.current = false
       }
     })()
-  }, [joinMode, groupSessionId, view, groupName, mealType, day, persons])
+  }, [sessionReady, joinMode, groupSessionId, view, groupName, mealType, day, persons])
 
   // Host: sync setup to backend
   useEffect(() => {
@@ -336,7 +445,10 @@ export default function AppContent() {
       try {
         const data = await fetchGroup(groupSessionId)
         if (isGroupSearchComplete(data)) {
-          applySearchResults(data)
+          if (findInProgressRef.current) return
+          if (joinMode || !skipResultsRedirectRef.current) {
+            applySearchResults(data)
+          }
           return
         }
         setPersons((prev) =>
@@ -344,20 +456,25 @@ export default function AppContent() {
             prev,
             data.persons,
             joinMode ? joinSlotIndex : null,
+            isHost && !joinMode,
           ),
         )
         if (data.group_name) setGroupName(data.group_name)
         if (data.meal_type) setMealType(data.meal_type)
         if (data.day) setDay(normalizeDay(data.day))
-      } catch {
-        /* ignore */
+      } catch (e) {
+        if (!joinMode && isHost) {
+          clearStoredGroupSession(groupSessionId)
+          setGroupSessionId(null)
+          groupCreatedRef.current = false
+        }
       }
     }
 
     poll()
     const interval = setInterval(poll, 5000)
     return () => clearInterval(interval)
-  }, [groupSessionId, view, joinMode, joinSlotIndex, applySearchResults])
+  }, [groupSessionId, view, joinMode, joinSlotIndex, isHost, applySearchResults, clearStoredGroupSession])
 
   useEffect(() => {
     if (view !== 'results' || !result?.session_id) return
@@ -440,6 +557,9 @@ export default function AppContent() {
   const handleFind = async () => {
     setLoading(true)
     setError(null)
+    setResult(null)
+    skipResultsRedirectRef.current = true
+    findInProgressRef.current = true
     try {
       if (!isPro) {
         const dailyCount = user
@@ -466,12 +586,19 @@ export default function AppContent() {
       }))
 
       if (groupSessionId && isHost) {
-        await updateGroup(groupSessionId, {
-          group_name: groupName,
-          meal_type: mealType,
-          day,
-          persons,
-        })
+        try {
+          await updateGroup(groupSessionId, {
+            group_name: groupName,
+            meal_type: mealType,
+            day,
+            persons,
+          })
+        } catch (syncErr) {
+          const msg = syncErr?.message || ''
+          if (!msg.includes('already has results')) {
+            throw syncErr
+          }
+        }
       }
 
       const res = await fetch(`${API_URL}/find`, {
@@ -505,10 +632,12 @@ export default function AppContent() {
       await persistSessionForUser(data, personsPayload)
       setVotes({})
       setVoters([])
+      skipResultsRedirectRef.current = false
       setView('results')
     } catch (e) {
       setError(e.message)
     } finally {
+      findInProgressRef.current = false
       setLoading(false)
     }
   }
@@ -593,6 +722,7 @@ export default function AppContent() {
   }
 
   const handleStartOver = () => {
+    skipResultsRedirectRef.current = true
     setView('setup')
     setResult(null)
     setError(null)
@@ -600,11 +730,55 @@ export default function AppContent() {
     setIsHost(true)
     setJoinSlotIndex(null)
     groupCreatedRef.current = false
+
+    const params = new URLSearchParams(window.location.search)
+    const joinId = params.get('join')
+    const nextUrl = joinId ? `?join=${joinId}` : window.location.pathname
+    window.history.replaceState({}, '', nextUrl)
   }
 
-  const handleContinueSession = () => {
-    const sessionId = localStorage.getItem(SESSION_KEY)
-    if (sessionId) loadSession(sessionId)
+  const resetSessionState = useCallback(() => {
+    skipResultsRedirectRef.current = true
+    const oldSessionId = groupSessionId || localStorage.getItem(SESSION_KEY)
+    clearStoredGroupSession(oldSessionId)
+
+    setResult(null)
+    setError(null)
+    setGroupSessionId(null)
+    setGroupName('Our Group')
+    setMealType('dinner')
+    setDay(todayDateString())
+    setPersons([{ ...EMPTY_PERSON }, { ...EMPTY_PERSON }])
+    setSavedRestaurants([])
+    setVotes({})
+    setVoters([])
+    setJoinMode(false)
+    setIsHost(true)
+    setJoinSlotIndex(null)
+    setHasSavedSession(false)
+    setInviteCopied(false)
+    groupCreatedRef.current = false
+    setSetupKey((k) => k + 1)
+
+    window.history.replaceState({}, '', window.location.pathname)
+  }, [groupSessionId, clearStoredGroupSession])
+
+  const handleGoHome = () => {
+    resetSessionState()
+    setView('home')
+  }
+
+  const handleStartNewSession = () => {
+    resetSessionState()
+    setView('setup')
+  }
+
+  const handleLoadPastSessions = () => {
+    setView('past-sessions')
+  }
+
+  const handleLoadSessionFromList = (sessionId) => {
+    loadSession(sessionId)
   }
 
   const handleUpgrade = async () => {
@@ -666,12 +840,27 @@ export default function AppContent() {
     setSavedRestaurants((prev) => [...prev, name])
   }
 
+  const handleSignOut = async () => {
+    await signOut()
+    handleGoHome()
+    if (authConfigured) {
+      setNeedsSignIn(true)
+    }
+  }
+
+  const needsJoinSignIn =
+    Boolean(pendingJoinId) && authConfigured && !authLoading && !user
+  const needsAuthGate =
+    authConfigured && !authLoading && !user && (needsJoinSignIn || needsSignIn)
+  const showNavHome = view !== 'home' && !joinMode && !needsAuthGate
+
   return (
-    <div className="min-h-full bg-bg">
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-border px-4 py-2.5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-accent">TableFor</span>
+    <div className="flex h-full min-h-0 flex-col bg-transparent">
+      {!needsAuthGate && (
+      <header className="app-header-safe sticky top-0 z-30 shrink-0 bg-white/90 backdrop-blur border-b border-border px-4 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <TableForBrand titleClassName="text-base font-bold text-accent" />
             {isPro && (
               <span className="px-1.5 py-0.5 rounded-full bg-accent/20 text-accent text-[10px] font-bold">
                 PRO
@@ -679,18 +868,29 @@ export default function AppContent() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            {authConfigured && user && (
+              <span
+                className="text-[10px] text-text-secondary truncate max-w-[88px] md:max-w-[140px] lg:max-w-none lg:text-xs"
+                title={profile?.email || user.email}
+              >
+                {profile?.display_name || user.email?.split('@')[0] || 'Account'}
+              </span>
+            )}
+            {showNavHome && (
+              <button
+                type="button"
+                onClick={handleGoHome}
+                className="px-2.5 py-1 text-[10px] font-medium border border-border rounded-full text-text-secondary hover:text-text-primary transition-colors shrink-0"
+              >
+                Home
+              </button>
+            )}
             {authConfigured && (
               user ? (
                 <>
-                  <span
-                    className="text-[10px] text-text-secondary truncate max-w-[88px]"
-                    title={profile?.email || user.email}
-                  >
-                    {profile?.display_name || user.email?.split('@')[0] || 'Account'}
-                  </span>
                   <button
                     type="button"
-                    onClick={signOut}
+                    onClick={handleSignOut}
                     className="px-2.5 py-1 text-[10px] font-medium border border-border rounded-full text-text-secondary hover:text-red-600 hover:border-red-200 transition-colors"
                   >
                     Sign out
@@ -728,7 +928,27 @@ export default function AppContent() {
           </div>
         </div>
       </header>
+      )}
 
+      {needsAuthGate ? (
+        <AuthModal
+          open
+          required
+          fullPage
+          fullPageHeroTitle={needsJoinSignIn ? undefined : 'Sign in to TableFor'}
+          fullPageHeroSubtitle={
+            needsJoinSignIn
+              ? undefined
+              : 'Sign in or create an account to save sessions and pick up where you left off.'
+          }
+          onAuthenticated={() => setNeedsSignIn(false)}
+        />
+      ) : authLoading && pendingJoinId ? (
+        <div className="flex flex-1 items-center justify-center py-20 text-sm text-text-secondary">
+          Loading…
+        </div>
+      ) : (
+        <>
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
 
       {error && (
@@ -744,8 +964,28 @@ export default function AppContent() {
         </div>
       )}
 
-      {view === 'setup' ? (
+      {view === 'home' && (
+        <SessionHome
+          onStartNewSession={handleStartNewSession}
+          onLoadPastSessions={handleLoadPastSessions}
+          onDemo={handleDemo}
+        />
+      )}
+
+      {view === 'past-sessions' && (
+        <PastSessionsPanel
+          userSessions={userSessions}
+          loadingSessionId={loadingSessionId}
+          onLoadSession={handleLoadSessionFromList}
+          onSignIn={() => setAuthOpen(true)}
+          isSignedIn={Boolean(user)}
+          hasLocalSession={hasSavedSession}
+        />
+      )}
+
+      {view === 'setup' && (
         <GroupSetup
+          key={setupKey}
           groupName={groupName}
           setGroupName={setGroupName}
           mealType={mealType}
@@ -755,15 +995,7 @@ export default function AppContent() {
           persons={persons}
           setPersons={setPersons}
           onFind={handleFind}
-          onDemo={handleDemo}
           loading={loading}
-          onContinueSession={handleContinueSession}
-          hasSavedSession={hasSavedSession}
-          userSessions={userSessions}
-          onLoadUserSession={loadSession}
-          loadingSessionId={loadingSessionId}
-          isSignedIn={Boolean(user)}
-          onSignIn={() => setAuthOpen(true)}
           isPro={isPro}
           onUpgrade={handleUpgrade}
           maxPersons={isPro ? PRO_MAX_PERSONS : FREE_MAX_PERSONS}
@@ -775,7 +1007,9 @@ export default function AppContent() {
           inviteCopied={inviteCopied}
           onGuestPersonComplete={handleGuestPersonComplete}
         />
-      ) : (
+      )}
+
+      {view === 'results' && (
         <ResultsPanel
           result={result}
           persons={persons}
@@ -790,6 +1024,8 @@ export default function AppContent() {
           setVoterName={setVoterName}
           onVote={handleVote}
         />
+      )}
+        </>
       )}
     </div>
   )

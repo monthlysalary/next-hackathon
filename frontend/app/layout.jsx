@@ -5,6 +5,12 @@ export const metadata = {
   description: 'Find the perfect restaurant for your whole group',
 }
 
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
+
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
@@ -14,7 +20,7 @@ export default function RootLayout({ children }) {
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body className="h-full overflow-hidden">{children}</body>
     </html>
   )
 }

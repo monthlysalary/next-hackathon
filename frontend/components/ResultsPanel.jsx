@@ -65,7 +65,7 @@ export default function ResultsPanel({
   )
 
   return (
-    <div className="px-4 py-4 pb-8">
+    <div className="px-4 py-4 pb-8 md:px-6 lg:px-8">
       {/* Top actions */}
       <div className="flex items-center gap-2 mb-4">
         <button
@@ -200,7 +200,7 @@ export default function ResultsPanel({
 
       {/* Map or cards */}
       {showMap ? (
-        <div className="h-[400px] rounded-[20px] overflow-hidden border border-border shadow-card mb-4">
+        <div className="mb-4 h-[400px] overflow-hidden rounded-[20px] border border-border shadow-card lg:h-[520px]">
           <MapView
             persons={persons}
             suggestedArea={result.suggested_area}
@@ -209,7 +209,7 @@ export default function ResultsPanel({
           />
         </div>
       ) : (
-        <div className="space-y-3 mb-4">
+        <div className="mb-4 space-y-3 lg:grid lg:grid-cols-2 lg:gap-4 lg:space-y-0">
           {result.restaurants.map((r, i) => (
             <RestaurantCard
               key={r.name}
@@ -228,7 +228,7 @@ export default function ResultsPanel({
       )}
 
       {/* Refine / Chat input */}
-      <div className="sticky bottom-0 bg-bg pt-2 pb-1">
+      <div className="sticky bottom-0 bg-white/90 backdrop-blur pt-2 pb-1">
         <form onSubmit={handleRefineSubmit} className="flex gap-2">
           <input
             type="text"
