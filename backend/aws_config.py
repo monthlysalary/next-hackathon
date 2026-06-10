@@ -37,7 +37,7 @@ if not VERIFY_SSL:
         _original_send = requests.adapters.HTTPAdapter.send
 
         def _patched_send(self, request, **kwargs):
-            kwargs.setdefault("verify", False)
+            kwargs["verify"] = False
             return _original_send(self, request, **kwargs)
 
         requests.adapters.HTTPAdapter.send = _patched_send

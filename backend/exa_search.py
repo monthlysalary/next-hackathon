@@ -155,34 +155,75 @@ def _dedupe_results(results: list[dict]) -> list[dict]:
     return deduped
 
 
-def search_restaurants(area: str, dietary: list[str], meal_type: str = "", cuisines: list[str] = None) -> list[dict]:
-    dietary_str = " ".join(d for d in dietary if d and d.lower() != "none")
-    cuisine_str = " ".join(cuisines) if cuisines else ""
-
-    # Tailor search query to meal type
-    meal_hint = ""
+def _meal_hint(meal_type: str) -> str:
     if meal_type in ("supper",):
-        meal_hint = "supper late night 24 hours"
-    elif meal_type in ("breakfast",):
-        meal_hint = "breakfast brunch kaya toast prata dim sum cafe morning"
-    elif meal_type in ("snack",):
-        meal_hint = "cafe snack dessert bakery"
-    elif meal_type in ("drinks",):
-        meal_hint = "bar pub drinks cocktail bubble tea"
-    elif meal_type in ("lunch",):
-        meal_hint = "lunch set meal"
-    elif meal_type in ("dinner",):
-        meal_hint = "dinner restaurant"
-    elif meal_type in ("dessert",):
-        meal_hint = "dessert cafe bakery ice cream waffles"
+        return "supper late night 24 hours"
+    if meal_type in ("breakfast",):
+        return "breakfast brunch kaya toast prata dim sum cafe morning"
+    if meal_type in ("snack", "any"):
+        return "cafe snack dessert"
+    if meal_type in ("lunch",):
+        return "lunch"
+    if meal_type in ("dinner",):
+        return "dinner"
+    if meal_type in ("dessert",):
+        return "dessert cafe bakery ice cream waffles"
+    return ""
 
-    query = f"{area} Singapore {cuisine_str} {meal_hint} restaurant {dietary_str} recommended 2024 2025".strip()
+
+def _normalize_cuisines(cuisines: list[str] | None) -> list[str]:
+    seen: set[str] = set()
+    normalized: list[str] = []
+    for cuisine in cuisines or []:
+        value = cuisine.strip().lower()
+        if not value or value == "any" or value in seen:
+            continue
+        seen.add(value)
+        normalized.append(value)
+    return normalized
+
+
+def _build_restaurant_query(
+    area: str,
+    meal_hint: str,
+    dietary_str: str,
+    cuisine: str | None = None,
+) -> str:
+    cuisine_part = f"{cuisine} " if cuisine else ""
+    parts = [
+        area,
+        "Singapore",
+        cuisine_part + meal_hint,
+        "restaurant",
+        dietary_str,
+        "recommended",
+        "2024",
+        "2025",
+    ]
+    return " ".join(p for p in parts if p)
+
+
+def search_restaurants(
+    area: str,
+    dietary: list[str],
+    meal_type: str = "",
+    cuisines: list[str] | None = None,
+) -> list[dict]:
+    dietary_str = " ".join(d for d in dietary if d and d.lower() != "none")
+    meal_hint = _meal_hint(meal_type)
+    cuisine_list = _normalize_cuisines(cuisines)
     kwargs = {
-        "num_results": 6,
+        "num_results": 5 if cuisine_list else 6,
         "include_domains": RESTAURANT_DOMAINS,
     }
 
-    results = search_with_cache(query, **kwargs)
+    queries = [_build_restaurant_query(area, meal_hint, dietary_str)]
+    for cuisine in cuisine_list[:4]:
+        queries.append(_build_restaurant_query(area, meal_hint, dietary_str, cuisine))
+
+    results: list[dict] = []
+    for query in queries:
+        results.extend(search_with_cache(query, **kwargs))
 
     from backend.location import SINGAPORE_AREAS
 
@@ -196,15 +237,15 @@ def search_restaurants(area: str, dietary: list[str], meal_type: str = "", cuisi
             break
 
     if nearby_area:
-        nearby_query = (
-            f"{nearby_area} Singapore restaurant {dietary_str} recommended 2024 2025"
-        )
-        nearby_results = search_with_cache(nearby_query, **kwargs)
-        results = _dedupe_results(results + nearby_results)
-    else:
-        results = _dedupe_results(results)
+        nearby_queries = [_build_restaurant_query(nearby_area, meal_hint, dietary_str)]
+        for cuisine in cuisine_list[:4]:
+            nearby_queries.append(
+                _build_restaurant_query(nearby_area, meal_hint, dietary_str, cuisine)
+            )
+        for query in nearby_queries:
+            results.extend(search_with_cache(query, **kwargs))
 
-    return results
+    return _dedupe_results(results)[:18]
 
 
 def search_deals(restaurant_name: str) -> str | None:

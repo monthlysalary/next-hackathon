@@ -1,6 +1,7 @@
 import json
 import time
 from decimal import Decimal
+from pathlib import Path
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
@@ -27,6 +28,27 @@ _dynamo_enabled = True
 
 # In-memory fallback when AWS credentials aren't available (local dev)
 _local_sessions: dict[str, dict] = {}
+_LOCAL_STORE_PATH = Path(__file__).resolve().parent.parent / ".local-sessions.json"
+
+
+def _load_local_store() -> None:
+    global _local_sessions
+    if not _LOCAL_STORE_PATH.exists():
+        return
+    try:
+        _local_sessions = json.loads(_LOCAL_STORE_PATH.read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Could not load local sessions: {e}")
+
+
+def _persist_local_store() -> None:
+    try:
+        _LOCAL_STORE_PATH.write_text(json.dumps(_local_sessions, default=str))
+    except OSError as e:
+        print(f"Could not persist local sessions: {e}")
+
+
+_load_local_store()
 
 
 def _get_table():
@@ -83,12 +105,14 @@ def save_session(session_id: str, data: dict) -> None:
     table = _get_table()
     if table is None:
         _local_sessions[session_id] = item
+        _persist_local_store()
         return
     try:
         table.put_item(Item=_convert_floats(item))
     except (ClientError, NoCredentialsError, BotoCoreError) as e:
         print(f"DynamoDB save failed, using in-memory store: {e}")
         _local_sessions[session_id] = item
+        _persist_local_store()
 
 
 def get_session(session_id: str) -> dict | None:
@@ -113,6 +137,7 @@ def save_restaurant(session_id: str, restaurant: dict) -> None:
         session = _local_sessions.get(session_id)
         if session:
             session.setdefault("saved_restaurants", []).append(restaurant)
+            _persist_local_store()
         return
     try:
         table.update_item(
@@ -131,6 +156,7 @@ def save_restaurant(session_id: str, restaurant: dict) -> None:
         session = _local_sessions.get(session_id)
         if session:
             session.setdefault("saved_restaurants", []).append(restaurant)
+            _persist_local_store()
 
 
 def cast_vote(session_id: str, voter_name: str, restaurant_name: str) -> dict:
@@ -168,6 +194,7 @@ def cast_vote(session_id: str, voter_name: str, restaurant_name: str) -> dict:
         session["votes"] = votes
         session["voters"] = voters
         _local_sessions[session_id] = session
+        _persist_local_store()
     else:
         try:
             table.update_item(
@@ -183,6 +210,7 @@ def cast_vote(session_id: str, voter_name: str, restaurant_name: str) -> dict:
             session["votes"] = votes
             session["voters"] = voters
             _local_sessions[session_id] = session
+            _persist_local_store()
 
     return {"votes": votes, "voters": voters}
 

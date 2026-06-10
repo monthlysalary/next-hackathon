@@ -9,6 +9,7 @@ import {
   MUST_HAVE_OPTIONS,
   AVOID_OPTIONS,
 } from '@/lib/constants'
+import { getPersonAvatarColor } from '@/lib/personAvatar'
 
 const STEPS = [
   { id: 1, title: 'Where are you?' },
@@ -94,15 +95,16 @@ function ChipInput({ selected, onChange, presets, addLabel, placeholder, inputRe
     if (!value || selected.includes(value)) {
       setInput('')
       setExpanded(false)
-      return
+      return selected
     }
-    if (value.toLowerCase() === 'none') {
-      onChange(['None'])
-    } else {
-      onChange([...selected.filter((s) => s !== 'None'), value])
-    }
+    const next =
+      value.toLowerCase() === 'none'
+        ? ['None']
+        : [...selected.filter((s) => s !== 'None'), value]
+    onChange(next)
     setInput('')
     setExpanded(false)
+    return next
   }
 
   useImperativeHandle(inputRef, () => ({ commitPending }), [input, selected, onChange])
@@ -135,7 +137,11 @@ function ChipInput({ selected, onChange, presets, addLabel, placeholder, inputRe
               }
             }}
             onBlur={() => {
-              if (!input.trim()) setExpanded(false)
+              if (input.trim()) {
+                commitPending()
+              } else {
+                setExpanded(false)
+              }
             }}
             placeholder={placeholder}
             className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-text-primary placeholder:text-text-secondary/50"
@@ -309,9 +315,14 @@ export default function PersonSetupWizard({
   }
 
   const goNext = () => {
-    if (step === 1) update('name', localName)
-    if (step === 3) dietaryRef.current?.commitPending()
-    if (step === 4) cuisineRef.current?.commitPending()
+    if (step === 3) {
+      const next = dietaryRef.current?.commitPending()
+      if (next) update('dietary', next)
+    }
+    if (step === 4) {
+      const next = cuisineRef.current?.commitPending()
+      if (next) update('cuisine_loves', next)
+    }
     if (step < TOTAL_STEPS && canProceed()) onStepChange(step + 1)
   }
 
@@ -330,14 +341,19 @@ export default function PersonSetupWizard({
 
   const summaryLines = buildPersonSummaryLines(person)
   const displayName = person.name.trim() || `Person ${index + 1}`
+  const initial = person.name.trim().charAt(0).toUpperCase() || String(index + 1)
+  const avatarColor = getPersonAvatarColor(index)
 
   if (completed) {
     return (
       <div className="bg-white border border-border rounded-[20px] p-4 shadow-card">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="w-7 h-7 rounded-full bg-success/15 flex items-center justify-center text-xs font-bold text-success">
-              ✓
+            <span
+              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+              style={{ backgroundColor: avatarColor.bg }}
+            >
+              {initial}
             </span>
             <span className="text-sm font-semibold text-text-primary">{displayName}</span>
           </div>
@@ -380,8 +396,11 @@ export default function PersonSetupWizard({
     <div className="bg-white border border-border rounded-[20px] p-4 shadow-card">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <span className="w-7 h-7 rounded-full bg-accent/15 flex items-center justify-center text-xs font-bold text-accent">
-            {index + 1}
+          <span
+            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+            style={{ backgroundColor: avatarColor.bg }}
+          >
+            {initial}
           </span>
           <span className="text-sm font-semibold text-text-primary">{displayName}</span>
         </div>

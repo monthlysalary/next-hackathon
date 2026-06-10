@@ -4,6 +4,11 @@ import { useState, useEffect } from 'react'
 import PersonSetupWizard from './PersonSetupWizard'
 import { EMPTY_PERSON, MEAL_OPTIONS, todayDateString, formatDisplayDate } from '@/lib/constants'
 import { FREE_MAX_PERSONS } from '@/lib/planLimits'
+import { getPersonAvatarColor, personInitial } from '@/lib/personAvatar'
+
+function isPersonJoined(person) {
+  return Boolean(person?.name?.trim() && person?.location?.trim())
+}
 
 const FRIENDS_KEY = 'tablefor_saved_friends'
 
@@ -57,15 +62,7 @@ export default function GroupSetup({
   persons,
   setPersons,
   onFind,
-  onDemo,
   loading,
-  onContinueSession,
-  hasSavedSession,
-  userSessions = [],
-  onLoadUserSession,
-  loadingSessionId,
-  isSignedIn = false,
-  onSignIn,
   isPro = false,
   onUpgrade,
   maxPersons = FREE_MAX_PERSONS,
@@ -77,7 +74,6 @@ export default function GroupSetup({
   inviteCopied = false,
   onGuestPersonComplete,
 }) {
-  const [sessionsExpanded, setSessionsExpanded] = useState(false)
   const [activePersonIndex, setActivePersonIndex] = useState(
     joinMode && joinSlotIndex != null ? joinSlotIndex : 0,
   )
@@ -160,14 +156,54 @@ export default function GroupSetup({
   const wizardIndex =
     joinMode && joinSlotIndex != null ? joinSlotIndex : activePersonIndex
 
+  const joinedCount = persons.filter(isPersonJoined).length
+
   return (
-    <div className="px-4 py-4 pb-8">
+    <div className="px-4 py-4 pb-8 md:px-6 lg:px-8">
       {joinMode && (
         <div className="mb-4 px-3.5 py-3 bg-accent/10 border border-accent/30 rounded-[16px] text-[12px] text-text-primary">
           <p className="font-semibold">You&apos;re joining {groupName}</p>
           <p className="text-text-secondary mt-1">
             Add your preferences below. The host will run the search when everyone is ready.
           </p>
+        </div>
+      )}
+
+      {groupSessionId && (
+        <div className="mb-4 px-3.5 py-3 bg-white border border-border rounded-[16px] shadow-card">
+          <p className="text-[13px] font-medium text-text-primary">
+            {joinedCount} / {persons.length} people joined
+          </p>
+          <div className="flex items-center gap-2 mt-3">
+            {persons.map((p, i) => {
+              const joined = isPersonJoined(p)
+              const initial = personInitial(p, i)
+              const color = getPersonAvatarColor(i)
+              const isActive = wizardIndex === i
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    if (joinMode && joinSlotIndex != null && i !== joinSlotIndex) return
+                    setActivePersonIndex(i)
+                  }}
+                  title={p.name.trim() || `Person ${i + 1}`}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all ${
+                    joinMode && joinSlotIndex != null && i !== joinSlotIndex ? 'opacity-50' : ''
+                  } ${isActive ? 'ring-2 ring-offset-1' : ''}`}
+                  style={{
+                    backgroundColor: joined ? color.bg : '#f5ede8',
+                    borderColor: color.border,
+                    color: joined ? '#ffffff' : '#888888',
+                    boxShadow: isActive ? `0 0 0 2px ${color.ring}` : undefined,
+                  }}
+                >
+                  {joined ? initial : ''}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
 
@@ -185,29 +221,6 @@ export default function GroupSetup({
             {inviteCopied ? 'Link copied!' : 'Copy invite link'}
           </button>
         </div>
-      )}
-
-      {/* Top actions */}
-      {!joinMode && (
-      <div className="flex items-center gap-2 mb-5">
-        {hasSavedSession && (
-          <button
-            type="button"
-            onClick={onContinueSession}
-            disabled={Boolean(loadingSessionId)}
-            className="flex-1 px-3 py-2 text-xs border border-border rounded-[14px] text-text-secondary hover:text-text-primary hover:border-accent transition-colors disabled:opacity-50"
-          >
-            Continue session
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onDemo}
-          className="flex-1 px-3 py-2 text-xs bg-surface-raised border border-border rounded-[14px] text-accent hover:bg-border transition-colors"
-        >
-          Try demo
-        </button>
-      </div>
       )}
 
       {/* Occasion */}
@@ -284,93 +297,6 @@ export default function GroupSetup({
         </div>
       )}
 
-      {isSignedIn && userSessions.length > 0 && !joinMode && (
-        <div className="mb-5">
-          <button
-            type="button"
-            onClick={() => setSessionsExpanded((open) => !open)}
-            className="w-full flex items-center justify-between px-3.5 py-3 bg-white border border-border rounded-[16px] shadow-card hover:border-accent transition-colors"
-          >
-            <div className="text-left">
-              <p className="text-[14px] font-medium text-text-primary">
-                Your saved sessions
-              </p>
-              <p className="text-[11px] text-text-secondary mt-0.5">
-                {userSessions.length} session{userSessions.length !== 1 ? 's' : ''} · tap to browse
-              </p>
-            </div>
-            <span className="text-text-secondary text-sm ml-2 shrink-0">
-              {sessionsExpanded ? '▲' : '▼'}
-            </span>
-          </button>
-
-          {sessionsExpanded && (
-            <div className="mt-2 space-y-2">
-              {userSessions.map((session) => {
-                const isLoading = loadingSessionId === session.session_id
-                const meal = session.session_data?.meal_type
-                const dateLabel = session.created_at
-                  ? new Date(session.created_at).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                    })
-                  : null
-
-                return (
-                  <button
-                    key={session.id}
-                    type="button"
-                    onClick={() => onLoadUserSession?.(session.session_id)}
-                    disabled={Boolean(loadingSessionId)}
-                    className={`w-full text-left px-3.5 py-3 rounded-[16px] border transition-all ${
-                      isLoading
-                        ? 'bg-accent/5 border-accent ring-1 ring-accent/20'
-                        : 'bg-surface-raised border-border hover:border-accent hover:shadow-card'
-                    } disabled:opacity-60`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-text-primary truncate">
-                          {session.group_name || 'Dining session'}
-                        </p>
-                        <p className="text-[11px] text-text-secondary mt-1">
-                          📍 {session.suggested_area || 'Area TBD'}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5 mt-2">
-                          {meal && (
-                            <span className="px-2 py-0.5 rounded-full bg-white border border-border text-[10px] text-text-secondary capitalize">
-                              {meal}
-                            </span>
-                          )}
-                          {dateLabel && (
-                            <span className="px-2 py-0.5 rounded-full bg-white border border-border text-[10px] text-text-secondary">
-                              {dateLabel}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-medium text-accent shrink-0 pt-0.5">
-                        {isLoading ? 'Loading…' : 'Open →'}
-                      </span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {!isSignedIn && onSignIn && !joinMode && (
-        <button
-          type="button"
-          onClick={onSignIn}
-          className="w-full mb-5 px-3 py-3 text-xs bg-surface border border-border rounded-[14px] text-text-secondary hover:border-accent hover:text-text-primary transition-colors"
-        >
-          Sign in to save sessions to your account
-        </button>
-      )}
-
       {/* People section — step-by-step wizard */}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-3">
@@ -379,9 +305,14 @@ export default function GroupSetup({
           </h2>
         </div>
 
-        {/* Person tabs */}
+        {/* Person tabs — avatar initials (when no join-status row above) */}
+        {!groupSessionId && (
         <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-          {persons.map((p, i) => (
+          {persons.map((p, i) => {
+            const color = getPersonAvatarColor(i)
+            const isActive = wizardIndex === i
+            const filled = personCompleted[i] || isActive
+            return (
             <button
               key={i}
               type="button"
@@ -389,21 +320,23 @@ export default function GroupSetup({
                 if (joinMode && joinSlotIndex != null && i !== joinSlotIndex) return
                 setActivePersonIndex(i)
               }}
-              className={`shrink-0 px-3 py-2 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                wizardIndex === i
-                  ? 'bg-accent text-white'
-                  : personCompleted[i]
-                    ? 'bg-success/10 text-success border border-success/30'
-                    : 'bg-surface-raised text-text-secondary border border-border'
+              title={p.name.trim() || `Person ${i + 1}`}
+              className={`shrink-0 w-10 h-10 rounded-full text-xs font-bold transition-all flex items-center justify-center border-2 ${
+                isActive ? 'ring-2 ring-offset-1' : ''
               } ${joinMode && joinSlotIndex != null && i !== joinSlotIndex ? 'opacity-50' : ''}`}
+              style={{
+                backgroundColor: filled ? color.bg : '#f5ede8',
+                borderColor: color.border,
+                color: filled ? '#ffffff' : '#888888',
+                boxShadow: isActive ? `0 0 0 2px ${color.ring}` : undefined,
+              }}
             >
-              {personCompleted[i] && wizardIndex !== i && (
-                <span className="text-[10px]">✓</span>
-              )}
-              {p.name.trim() || `Person ${i + 1}`}
+              {personInitial(p, i)}
             </button>
-          ))}
+            )
+          })}
         </div>
+        )}
 
         {persons[wizardIndex] && (
           <PersonSetupWizard
@@ -532,19 +465,46 @@ export default function GroupSetup({
         ) : null}
       </div>
 
-      {joinMode && personCompleted[joinSlotIndex] && (
-        <p className="mb-3 text-xs text-text-secondary text-center">
-          You&apos;re all set! Waiting for the host to find restaurants.
-        </p>
-      )}
+      {/* Dietary conflict warnings */}
+      {(() => {
+        const warnings = []
+        const allDietary = persons.flatMap((p) => (p.dietary || []).map((d) => d.toLowerCase()))
+        const allCuisines = persons.flatMap((p) => (p.cuisine_loves || []).map((c) => c.toLowerCase()))
 
-      {isHost && canFind && (
-        <p className="mb-3 text-xs text-text-secondary text-center">
-          Ready to find restaurants
-        </p>
-      )}
+        // Halal person + someone wants pork-heavy cuisine
+        const hasHalal = allDietary.includes('halal')
+        const hasNoPork = allDietary.includes('no pork')
+        if ((hasHalal || hasNoPork) && allCuisines.includes('chinese')) {
+          const halalPerson = persons.find((p) => p.dietary?.some((d) => d.toLowerCase() === 'halal' || d.toLowerCase() === 'no pork'))
+          warnings.push(`⚠️ ${halalPerson?.name || 'Someone'} needs halal/no-pork, but Chinese cuisine often includes pork dishes. The AI will find halal-friendly Chinese options.`)
+        }
 
-      {isHost && (
+        // Vegetarian + seafood/meat-heavy cuisines
+        const hasVeg = allDietary.includes('veg') || allDietary.includes('vegetarian') || allDietary.includes('vegan')
+        if (hasVeg && (allCuisines.includes('korean') || allCuisines.includes('japanese'))) {
+          const vegPerson = persons.find((p) => p.dietary?.some((d) => ['veg', 'vegetarian', 'vegan'].includes(d.toLowerCase())))
+          warnings.push(`⚠️ ${vegPerson?.name || 'Someone'} is vegetarian, but Korean/Japanese cuisine is meat-heavy. Options may be limited.`)
+        }
+
+        // Budget mismatch
+        const budgets = persons.map((p) => p.budget).filter(Boolean)
+        if (budgets.includes('< S$10') && budgets.includes('> S$35')) {
+          warnings.push(`⚠️ Big budget gap in the group (< S$10 vs > S$35). The AI will target the lowest budget to keep it fair.`)
+        }
+
+        if (warnings.length === 0) return null
+        return (
+          <div className="mb-4 space-y-2">
+            {warnings.map((w, i) => (
+              <div key={i} className="px-3.5 py-2.5 bg-amber-50 border border-amber-200 rounded-[14px] text-[11px] text-amber-800">
+                {w}
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
+      {/* Find button */}
       <button
         type="button"
         onClick={handleFind}
