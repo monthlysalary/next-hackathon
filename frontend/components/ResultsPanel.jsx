@@ -199,7 +199,7 @@ function AIChatDrawer({ open, onClose, onRefine, loading, onAddRestaurant, newRe
 export default function ResultsPanel({
   result,
   persons,
-  onStartOver,
+  onBack,
   savedRestaurants,
   onRestaurantSaved,
   onRefine,
@@ -263,7 +263,7 @@ export default function ResultsPanel({
         <div className="flex items-center gap-2 mb-4">
           <button
             type="button"
-            onClick={onStartOver}
+            onClick={onBack}
             className="px-3 py-1.5 text-[11px] bg-white border border-border rounded-[14px] text-text-secondary hover:text-text-primary transition-colors shadow-card"
           >
             ← Back

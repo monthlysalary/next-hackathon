@@ -20,16 +20,10 @@ body {
 
 .tablefor-app-bg {
   background-color: #fdf6f0;
-  background-image: url('/tablefor-bg.png');
-  background-size: cover;
-  background-position: center top;
-  background-repeat: no-repeat;
-}
-
-@media (min-width: 768px) {
-  .tablefor-app-bg {
-    background-attachment: fixed;
-  }
+  background-image: url('/tablefor-pattern.svg'), url('/tablefor-pattern.svg');
+  background-size: 64px 64px;
+  background-position: 0 0, 32px 32px;
+  background-repeat: repeat;
 }
 
 /* Single scroll container for the full-page web app */
@@ -71,7 +65,8 @@ body {
   }
 
   .app-header-safe {
-    padding-top: env(safe-area-inset-top);
+    padding-top: calc(env(safe-area-inset-top, 0px) + 0.75rem);
+    padding-bottom: 0.75rem;
   }
 }
 

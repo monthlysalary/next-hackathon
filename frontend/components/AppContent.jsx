@@ -772,6 +772,18 @@ export default function AppContent() {
     setView('results')
   }
 
+  const handleBackToSetup = () => {
+    skipResultsRedirectRef.current = true
+    setView('setup')
+    setError(null)
+  }
+
+  const handleViewResults = () => {
+    if (!result) return
+    skipResultsRedirectRef.current = false
+    setView('results')
+  }
+
   const handleStartOver = () => {
     skipResultsRedirectRef.current = true
     setView('setup')
@@ -911,10 +923,13 @@ export default function AppContent() {
   return (
     <div className="flex h-full min-h-0 flex-col bg-transparent">
       {!needsAuthGate && (
-      <header className="app-header-safe sticky top-0 z-30 shrink-0 bg-white/90 backdrop-blur border-b border-border px-4 py-2.5">
-        <div className="flex items-center justify-between gap-2">
+      <header className="app-header-safe sticky top-0 z-30 shrink-0 bg-white/90 backdrop-blur border-b border-border px-4 py-3 supports-[padding:env(safe-area-inset-top)]:py-0">
+        <div className="flex min-h-[2.75rem] items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <TableForBrand titleClassName="text-base font-bold text-accent" />
+            <TableForBrand
+              titleClassName="text-base font-bold text-accent"
+              className="translate-y-0.5"
+            />
             {isPro && (
               <span className="px-1.5 py-0.5 rounded-full bg-accent/20 text-accent text-[10px] font-bold">
                 PRO
@@ -1060,6 +1075,8 @@ export default function AppContent() {
           onCopyInvite={handleCopyInvite}
           inviteCopied={inviteCopied}
           onGuestPersonComplete={handleGuestPersonComplete}
+          hasResults={Boolean(result)}
+          onViewResults={handleViewResults}
         />
       )}
 
@@ -1067,7 +1084,7 @@ export default function AppContent() {
         <ResultsPanel
           result={result}
           persons={persons}
-          onStartOver={handleStartOver}
+          onBack={handleBackToSetup}
           savedRestaurants={savedRestaurants}
           onRestaurantSaved={handleRestaurantSaved}
           onRefine={handleRefine}

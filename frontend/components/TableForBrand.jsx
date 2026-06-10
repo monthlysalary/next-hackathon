@@ -28,8 +28,8 @@ export default function TableForBrand({
         width={size === 'lg' ? 64 : 28}
         height={size === 'lg' ? 64 : 28}
       />
-      <div className={stacked ? '' : 'min-w-0'}>
-        <span className={titleClassName || defaultTitle}>TableFor</span>
+      <div className={stacked ? '' : 'min-w-0 flex items-center'}>
+        <span className={`${titleClassName || defaultTitle} leading-none`}>TableFor</span>
         {showTagline && (
           <p className="mt-0.5 text-sm text-text-secondary">Group Dining Agent</p>
         )}

@@ -247,12 +247,6 @@ export default function RestaurantCard({
           </p>
         </div>
 
-        {restaurant.deal && (
-          <div className="bg-orange-50 border border-orange-200 rounded-[14px] px-3 py-2 mb-3 text-[12px] text-accent">
-            🏷️ {restaurant.deal}
-          </div>
-        )}
-
         {/* Actions */}
         <div className="flex gap-2">
           <a

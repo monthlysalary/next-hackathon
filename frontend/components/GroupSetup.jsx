@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import PersonSetupWizard from './PersonSetupWizard'
 import { EMPTY_PERSON, MEAL_OPTIONS, todayDateString, formatDisplayDate } from '@/lib/constants'
 import { FREE_MAX_PERSONS } from '@/lib/planLimits'
@@ -8,6 +8,16 @@ import { getPersonAvatarColor, personInitial } from '@/lib/personAvatar'
 
 function isPersonJoined(person) {
   return Boolean(person?.name?.trim() && person?.location?.trim())
+}
+
+const PERSON_WIZARD_TOTAL_STEPS = 7
+
+function wizardStateForPerson(person) {
+  const complete = isPersonJoined(person)
+  return {
+    completed: complete,
+    step: complete ? PERSON_WIZARD_TOTAL_STEPS : 1,
+  }
 }
 
 const FRIENDS_KEY = 'tablefor_saved_friends'
@@ -73,26 +83,71 @@ export default function GroupSetup({
   onCopyInvite,
   inviteCopied = false,
   onGuestPersonComplete,
+  hasResults = false,
+  onViewResults,
 }) {
   const [activePersonIndex, setActivePersonIndex] = useState(
     joinMode && joinSlotIndex != null ? joinSlotIndex : 0,
   )
-  const [personSteps, setPersonSteps] = useState(() => persons.map(() => 1))
-  const [personCompleted, setPersonCompleted] = useState(() => persons.map(() => false))
+  const [personSteps, setPersonSteps] = useState(() =>
+    persons.map((p) => wizardStateForPerson(p).step),
+  )
+  const [personCompleted, setPersonCompleted] = useState(() =>
+    persons.map((p) => wizardStateForPerson(p).completed),
+  )
   const [savedFriends, setSavedFriends] = useState([])
   const [showFriendPicker, setShowFriendPicker] = useState(false)
+  const localEditRef = useRef(new Set())
+  const prevPersonsRef = useRef(persons)
 
   useEffect(() => {
     setSavedFriends(getSavedFriends())
   }, [])
 
+  // When a guest submits via invite link, their slot goes from empty to filled
+  // on the host device — jump straight to the summary view.
+  useEffect(() => {
+    if (!isHost || joinMode) {
+      prevPersonsRef.current = persons
+      return
+    }
+
+    setPersonCompleted((prev) =>
+      persons.map((p, i) => {
+        if (prev[i]) return true
+        const wasEmpty = !isPersonJoined(prevPersonsRef.current[i])
+        const nowJoined = isPersonJoined(p)
+        if (wasEmpty && nowJoined && !localEditRef.current.has(i)) return true
+        return prev[i] ?? false
+      }),
+    )
+    setPersonSteps((prev) =>
+      persons.map((p, i) => {
+        const wasEmpty = !isPersonJoined(prevPersonsRef.current[i])
+        const nowJoined = isPersonJoined(p)
+        if (wasEmpty && nowJoined && !localEditRef.current.has(i)) {
+          return PERSON_WIZARD_TOTAL_STEPS
+        }
+        return prev[i] ?? 1
+      }),
+    )
+
+    prevPersonsRef.current = persons
+  }, [persons, isHost, joinMode])
+
   const updatePerson = (index, person) => {
+    if (isHost && !joinMode) {
+      localEditRef.current.add(index)
+    }
     const next = [...persons]
     next[index] = person
     setPersons(next)
   }
 
   const setPersonStep = (index, step) => {
+    if (isHost && !joinMode) {
+      localEditRef.current.add(index)
+    }
     setPersonSteps((prev) => {
       const next = [...prev]
       while (next.length <= index) next.push(1)
@@ -112,9 +167,11 @@ export default function GroupSetup({
 
   const addFriend = (friend) => {
     if (persons.length >= maxPersons) return
-    setPersons([...persons, { ...EMPTY_PERSON, ...friend }])
-    setPersonSteps((prev) => [...prev, 1])
-    setPersonCompleted((prev) => [...prev, false])
+    const merged = { ...EMPTY_PERSON, ...friend }
+    const { completed, step } = wizardStateForPerson(merged)
+    setPersons([...persons, merged])
+    setPersonSteps((prev) => [...prev, step])
+    setPersonCompleted((prev) => [...prev, completed])
     setActivePersonIndex(persons.length)
     setShowFriendPicker(false)
   }
@@ -311,7 +368,7 @@ export default function GroupSetup({
           {persons.map((p, i) => {
             const color = getPersonAvatarColor(i)
             const isActive = wizardIndex === i
-            const filled = personCompleted[i] || isActive
+            const filled = personCompleted[i] || isPersonJoined(p)
             return (
             <button
               key={i}
@@ -349,7 +406,10 @@ export default function GroupSetup({
             canRemove={!joinMode && persons.length > 2}
             completed={personCompleted[wizardIndex]}
             onComplete={(finalPerson) => {
-              updatePerson(wizardIndex, finalPerson)
+              localEditRef.current.delete(wizardIndex)
+              const next = [...persons]
+              next[wizardIndex] = finalPerson
+              setPersons(next)
               setPersonCompleted((prev) => {
                 const next = [...prev]
                 while (next.length <= wizardIndex) next.push(false)
@@ -365,6 +425,7 @@ export default function GroupSetup({
               }
             }}
             onModify={() => {
+              localEditRef.current.add(wizardIndex)
               setPersonCompleted((prev) => {
                 const next = [...prev]
                 next[wizardIndex] = false
@@ -395,7 +456,7 @@ export default function GroupSetup({
                       : 'border-border text-text-secondary hover:text-accent hover:border-accent'
                   }`}
                 >
-                  👥 Friends
+                  Friends
                 </button>
               )}
             </div>
@@ -504,12 +565,43 @@ export default function GroupSetup({
         )
       })()}
 
+      {hasResults && onViewResults && (
+        <button
+          type="button"
+          onClick={onViewResults}
+          className="w-full mb-3 py-4 rounded-[16px] bg-accent hover:bg-accent-hover text-white font-semibold text-[17px] transition-colors flex items-center justify-center gap-2"
+        >
+          View Results
+          <svg
+            className="w-5 h-5"
+            aria-hidden="true"
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </button>
+      )}
+
       {isHost && (
       <button
         type="button"
         onClick={handleFind}
         disabled={!canFind || loading}
-        className="w-full py-4 rounded-[16px] bg-accent hover:bg-accent-hover text-white font-semibold text-[17px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className={`w-full py-4 rounded-[16px] font-semibold text-[17px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+          hasResults
+            ? 'bg-white border border-border text-text-primary hover:border-accent hover:text-accent'
+            : 'bg-accent hover:bg-accent-hover text-white'
+        }`}
       >
         {loading ? (
           <span className="flex items-center justify-center gap-2">
@@ -518,7 +610,7 @@ export default function GroupSetup({
           </span>
         ) : (
           <>
-            Find Matches
+            {hasResults ? 'Search again' : 'Find Matches'}
             <svg
               className="w-5 h-5"
               aria-hidden="true"
