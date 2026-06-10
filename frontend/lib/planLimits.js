@@ -1,4 +1,4 @@
-export const FREE_MAX_PERSONS = 5
+export const FREE_MAX_PERSONS = 6
 export const PRO_MAX_PERSONS = 20
 export const FREE_DAILY_SESSIONS = 999
 

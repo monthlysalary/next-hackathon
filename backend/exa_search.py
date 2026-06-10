@@ -155,15 +155,20 @@ def _dedupe_results(results: list[dict]) -> list[dict]:
     return deduped
 
 
-def search_restaurants(area: str, dietary: list[str], meal_type: str = "") -> list[dict]:
+def search_restaurants(area: str, dietary: list[str], meal_type: str = "", cuisines: list[str] = None) -> list[dict]:
     dietary_str = " ".join(d for d in dietary if d and d.lower() != "none")
+    cuisine_str = " ".join(cuisines) if cuisines else ""
 
     # Tailor search query to meal type
     meal_hint = ""
     if meal_type in ("supper",):
         meal_hint = "supper late night 24 hours"
-    elif meal_type in ("snack", "any"):
-        meal_hint = "cafe snack dessert"
+    elif meal_type in ("breakfast",):
+        meal_hint = "breakfast brunch kaya toast prata dim sum cafe morning"
+    elif meal_type in ("snack",):
+        meal_hint = "cafe snack dessert bakery"
+    elif meal_type in ("drinks",):
+        meal_hint = "bar pub drinks cocktail bubble tea"
     elif meal_type in ("lunch",):
         meal_hint = "lunch set meal"
     elif meal_type in ("dinner",):
@@ -171,7 +176,7 @@ def search_restaurants(area: str, dietary: list[str], meal_type: str = "") -> li
     elif meal_type in ("dessert",):
         meal_hint = "dessert cafe bakery ice cream waffles"
 
-    query = f"{area} Singapore {meal_hint} restaurant {dietary_str} recommended 2024 2025"
+    query = f"{area} Singapore {cuisine_str} {meal_hint} restaurant {dietary_str} recommended 2024 2025".strip()
     kwargs = {
         "num_results": 6,
         "include_domains": RESTAURANT_DOMAINS,

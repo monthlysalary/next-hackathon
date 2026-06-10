@@ -1,5 +1,6 @@
 import os
 import re
+import uuid
 
 import stripe
 from dotenv import load_dotenv
@@ -17,6 +18,8 @@ from backend.models import (
     ConfirmProRequest,
     GpsRequest,
     GroupRequest,
+    GroupSetupPayload,
+    JoinPersonRequest,
     RefineRequest,
     VoteRequest,
     VoteStatus,
@@ -28,7 +31,10 @@ app = FastAPI(title="TableFor API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://.*\.vercel\.app|http://(localhost|127\.0\.0\.1):\d+",
+    allow_origin_regex=(
+        r"https://.*\.vercel\.app|"
+        r"http://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+"
+    ),
     allow_origins=[
         "http://localhost:5173",
         "http://localhost:3000",
@@ -77,6 +83,9 @@ async def refine_restaurants(request: RefineRequest):
         return await agent.refine_results(request)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"Refine error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Refine failed: {type(e).__name__}: {e}")
 
 
 @app.post("/vote")
@@ -103,6 +112,125 @@ def get_session(session_id: str):
     if not data:
         raise HTTPException(status_code=404, detail="Session not found")
     return data
+
+
+def _save_group_setup(session_id: str, payload: dict) -> dict:
+    existing = dynamo.get_session(session_id) or {}
+    data = {
+        "status": "setup",
+        "group_name": payload.get("group_name", "Our Group"),
+        "meal_type": payload.get("meal_type", "dinner"),
+        "day": payload.get("day", "today"),
+        "persons": payload.get("persons", []),
+        "votes": existing.get("votes", {}),
+        "voters": existing.get("voters", []),
+        "saved_restaurants": existing.get("saved_restaurants", []),
+    }
+    if existing.get("restaurants"):
+        data["restaurants"] = existing.get("restaurants")
+        data["suggested_area"] = existing.get("suggested_area")
+        data["area_reason"] = existing.get("area_reason")
+        data["travel_summary"] = existing.get("travel_summary")
+    dynamo.save_session(session_id, data)
+    return {"session_id": session_id, **data}
+
+
+@app.post("/group/create")
+def create_group(body: GroupSetupPayload):
+    """Create a shareable group session before running a search."""
+    session_id = body.session_id or str(uuid.uuid4())
+    persons = [p.model_dump() for p in body.persons]
+    return _save_group_setup(
+        session_id,
+        {
+            "group_name": body.group_name,
+            "meal_type": body.meal_type,
+            "day": body.day,
+            "persons": persons,
+        },
+    )
+
+
+@app.get("/group/{session_id}")
+def get_group(session_id: str):
+    """Load group setup for host or join link."""
+    data = dynamo.get_session(session_id)
+    if not data:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return data
+
+
+@app.put("/group/{session_id}")
+def update_group(session_id: str, body: GroupSetupPayload):
+    """Sync group setup from the host device."""
+    existing = dynamo.get_session(session_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if existing.get("status") == "searched" and existing.get("restaurants"):
+        raise HTTPException(
+            status_code=409,
+            detail="This group already has results. Share the results link instead.",
+        )
+    persons = [p.model_dump() for p in body.persons]
+    return _save_group_setup(
+        session_id,
+        {
+            "group_name": body.group_name,
+            "meal_type": body.meal_type,
+            "day": body.day,
+            "persons": persons,
+        },
+    )
+
+
+@app.post("/group/{session_id}/join")
+def join_group(session_id: str, body: JoinPersonRequest):
+    """Add or update one person's preferences from a join link."""
+    existing = dynamo.get_session(session_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if existing.get("status") == "searched" and existing.get("restaurants"):
+        raise HTTPException(
+            status_code=409,
+            detail="This group already has results. Open the results link to vote.",
+        )
+
+    persons = list(existing.get("persons", []))
+    person_data = body.person.model_dump()
+    assigned_index = body.person_index
+
+    if assigned_index is not None and assigned_index >= 0:
+        while len(persons) <= assigned_index:
+            persons.append({})
+        persons[assigned_index] = person_data
+    else:
+        name_key = person_data.get("name", "").strip().lower()
+        match_idx = next(
+            (
+                i
+                for i, p in enumerate(persons)
+                if p.get("name", "").strip().lower() == name_key and name_key
+            ),
+            None,
+        )
+        if match_idx is not None:
+            persons[match_idx] = person_data
+            assigned_index = match_idx
+        else:
+            persons.append(person_data)
+            assigned_index = len(persons) - 1
+
+    result = _save_group_setup(
+        session_id,
+        {
+            "group_name": existing.get("group_name", "Our Group"),
+            "meal_type": existing.get("meal_type", "dinner"),
+            "day": existing.get("day", "today"),
+            "persons": persons,
+        },
+    )
+    result["person_index"] = assigned_index
+    return result
 
 
 @app.post("/save/{session_id}/{restaurant_name}")
@@ -135,10 +263,29 @@ def validate_location_endpoint(area: str):
     return location.validate_location(area)
 
 
+@app.get("/areas")
+def list_areas():
+    """All searchable MRT stations and areas for location autocomplete."""
+    return {"areas": location.list_searchable_areas()}
+
+
 @app.post("/gps-area")
 def gps_area(body: GpsRequest):
-    area = location.get_nearest_area(body.latitude, body.longitude)
-    return {"area": area}
+    return location.resolve_gps_area(body.latitude, body.longitude)
+
+
+@app.get("/menu/{restaurant_name:path}")
+def get_menu(restaurant_name: str):
+    """Search for a restaurant's menu. Returns empty if not found."""
+    menu_data = exa_search.search_menu(restaurant_name)
+    if not menu_data or not menu_data.get("menu_items"):
+        return {
+            "restaurant_name": restaurant_name,
+            "menu_items": [],
+            "source_url": None,
+            "note": None,
+        }
+    return menu_data
 
 
 @app.get("/menu/{restaurant_name}")

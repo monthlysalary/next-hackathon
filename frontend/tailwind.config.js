@@ -6,22 +6,27 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+      },
       colors: {
         bg: '#fdf6f0',
         surface: '#ffffff',
-        'surface-raised': '#f5ede8',
-        border: '#e8ddd8',
-        accent: '#F28155',
-        'accent-hover': '#e06d3f',
-        'text-primary': '#1a1a1a',
-        'text-secondary': '#888888',
-        success: '#34A853',
-        'tag-bg': '#f5ede8',
-        'tag-text': '#666666',
+        'surface-raised': '#faf3ec',
+        border: '#e8ddd4',
+        accent: '#d4763a',
+        'accent-hover': '#b8612c',
+        'accent-light': '#fef0e6',
+        'text-primary': '#2c1810',
+        'text-secondary': '#7a6558',
+        success: '#5a8a4a',
+        'tag-bg': '#faf3ec',
+        'tag-text': '#6b5545',
       },
       boxShadow: {
-        phone: '0 2px 32px rgba(0,0,0,0.08)',
-        card: '0 2px 16px rgba(0,0,0,0.06)',
+        phone: '0 4px 40px rgba(44,24,16,0.08)',
+        card: '0 1px 12px rgba(44,24,16,0.05)',
+        'card-hover': '0 4px 20px rgba(44,24,16,0.08)',
       },
       borderRadius: {
         '2xl': '16px',

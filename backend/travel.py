@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -19,10 +19,35 @@ def _get_token() -> str | None:
     return token
 
 
+def _parse_day(day: str) -> date:
+    """Parse YYYY-MM-DD or legacy today/tomorrow/weekend."""
+    now = datetime.now(SGT).date()
+    day_key = (day or "today").strip().lower()
+
+    if day_key == "today":
+        return now
+    if day_key == "tomorrow":
+        return now + timedelta(days=1)
+    if day_key == "weekend":
+        days_until_sat = (5 - now.weekday()) % 7
+        if days_until_sat == 0 and datetime.now(SGT).hour >= 19:
+            days_until_sat = 7
+        return now + timedelta(days=days_until_sat)
+
+    raw = (day or "").strip()[:10]
+    try:
+        if len(raw) == 10 and raw[4] == "-":
+            return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        pass
+    return now
+
+
 def _departure_datetime(meal_type: str, day: str) -> datetime:
     now = datetime.now(SGT)
     meal = (meal_type or "dinner").lower()
     hour = {
+        "breakfast": 8,
         "lunch": 12,
         "dinner": 19,
         "supper": 22,
@@ -31,15 +56,7 @@ def _departure_datetime(meal_type: str, day: str) -> datetime:
         "any": now.hour,
     }.get(meal, 19)
 
-    target_date = now.date()
-    day_key = (day or "today").lower()
-    if day_key == "tomorrow":
-        target_date += timedelta(days=1)
-    elif day_key == "weekend":
-        days_until_sat = (5 - now.weekday()) % 7
-        if days_until_sat == 0 and now.hour >= hour:
-            days_until_sat = 7
-        target_date += timedelta(days=days_until_sat)
+    target_date = _parse_day(day)
 
     return datetime(
         target_date.year,
@@ -78,6 +95,12 @@ def get_public_transit_route(
     token = _get_token()
     if not token:
         return None
+
+    # Ensure all coords are float (guard against Decimal/str from DynamoDB)
+    origin_lat = float(origin_lat)
+    origin_lng = float(origin_lng)
+    dest_lat = float(dest_lat)
+    dest_lng = float(dest_lng)
 
     depart = _departure_datetime(meal_type, day)
     params = {
@@ -158,6 +181,14 @@ def compute_travel_summary(
             lng = person.get("longitude")
             location = person.get("location", "")
 
+        # Ensure coordinates are float (DynamoDB may return Decimal or str)
+        try:
+            lat = float(lat) if lat is not None else None
+            lng = float(lng) if lng is not None else None
+        except (ValueError, TypeError):
+            lat = None
+            lng = None
+
         if lat is None or lng is None:
             summary[name] = f"Unknown route from {location or name}"
             continue
@@ -208,6 +239,15 @@ def apply_travel_summary(
             coords = location.geocode_area(data.get("location", ""))
             data["latitude"] = coords["latitude"]
             data["longitude"] = coords["longitude"]
+
+        # Ensure coordinates are float (DynamoDB may return Decimal or str)
+        try:
+            data["latitude"] = float(data["latitude"]) if data.get("latitude") else None
+            data["longitude"] = float(data["longitude"]) if data.get("longitude") else None
+        except (ValueError, TypeError):
+            data["latitude"] = None
+            data["longitude"] = None
+
         enriched.append(data)
 
     area = parsed.get("suggested_area") or meetup_area

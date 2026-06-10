@@ -4,13 +4,13 @@ export default function PhoneFrame({ children }) {
   return (
     <div className="relative">
       {/* Outer phone body */}
-      <div className="relative w-[390px] h-[844px] rounded-[55px] bg-white p-[12px] shadow-phone border border-border">
+      <div className="relative w-[390px] h-[844px] rounded-[55px] bg-[#faf3ec] p-[10px] shadow-phone border border-[#e8ddd4]">
         {/* Inner bezel */}
-        <div className="relative w-full h-full rounded-[44px] overflow-hidden bg-bg">
-          {/* Dynamic Island / Notch */}
+        <div className="relative w-full h-full rounded-[46px] overflow-hidden bg-white">
+          {/* Dynamic Island */}
           <div className="absolute top-0 left-0 right-0 z-50 flex justify-center pt-3 pointer-events-none">
-            <div className="w-[120px] h-[32px] bg-[#1a1a1a] rounded-full flex items-center justify-center gap-2">
-              <div className="w-[10px] h-[10px] rounded-full bg-[#2a2a2a] ring-1 ring-gray-600" />
+            <div className="w-[120px] h-[32px] bg-[#1a1a2e] rounded-full flex items-center justify-center gap-2">
+              <div className="w-[10px] h-[10px] rounded-full bg-[#2a2a3e] ring-1 ring-gray-700" />
             </div>
           </div>
 
@@ -34,9 +34,9 @@ export default function PhoneFrame({ children }) {
             </div>
           </div>
 
-          {/* Home indicator bar */}
+          {/* Home indicator */}
           <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
-            <div className="w-32 h-1 rounded-full bg-text-secondary/30" />
+            <div className="w-32 h-1 rounded-full bg-text-secondary/20" />
           </div>
         </div>
       </div>

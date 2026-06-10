@@ -11,6 +11,7 @@ class PersonProfile(BaseModel):
     cuisine_loves: list[str]
     must_have: list[str]
     avoid: list[str]
+    notes: str = ""
 
 
 class GroupRequest(BaseModel):
@@ -22,9 +23,29 @@ class GroupRequest(BaseModel):
     is_pro: bool = False
 
 
+class GroupSetupPayload(BaseModel):
+    session_id: str | None = None
+    group_name: str = "Our Group"
+    meal_type: str = "dinner"
+    day: str
+    persons: list[PersonProfile]
+    is_pro: bool = False
+
+
+class JoinPersonRequest(BaseModel):
+    person: PersonProfile
+    person_index: int | None = None
+
+
 class RefineRequest(BaseModel):
     session_id: str
     message: str
+    # Optional context so refine works even if session expired from backend
+    persons: list[PersonProfile] | None = None
+    meal_type: str | None = None
+    day: str | None = None
+    suggested_area: str | None = None
+    group_name: str | None = None
 
 
 class VoteRequest(BaseModel):

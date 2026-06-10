@@ -30,6 +30,60 @@ export const SINGAPORE_AREAS = [
 
 export const BUDGET_OPTIONS = ['< S$10', 'S$10–20', 'S$20–35', '> S$35']
 
+export const MEAL_OPTIONS = [
+  'Breakfast',
+  'Lunch',
+  'Dinner',
+  'Dessert',
+  'Supper',
+  'Any',
+]
+
+/** YYYY-MM-DD in local timezone (for <input type="date">) */
+export function formatDateForInput(date = new Date()) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+export function todayDateString() {
+  return formatDateForInput(new Date())
+}
+
+/** Map legacy day strings or ISO dates to YYYY-MM-DD */
+export function normalizeDay(value) {
+  if (!value) return todayDateString()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  const key = value.toLowerCase()
+  if (key === 'today') return todayDateString()
+  if (key === 'tomorrow') {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    return formatDateForInput(d)
+  }
+  if (key === 'weekend') {
+    const d = new Date()
+    const daysUntilSat = (6 - d.getDay()) % 7 || (d.getDay() === 6 ? 0 : 7)
+    d.setDate(d.getDate() + daysUntilSat)
+    return formatDateForInput(d)
+  }
+  return todayDateString()
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+]
+
+export function formatDisplayDate(isoDate) {
+  if (!isoDate || !/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return isoDate
+  const [y, m, d] = isoDate.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  return `${WEEKDAYS[date.getDay()]}, ${MONTHS[m - 1]} ${d}, ${y}`
+}
+
 export const DIETARY_OPTIONS = [
   'Halal',
   'Veg',
@@ -54,14 +108,17 @@ export const CUISINE_OPTIONS = [
 ]
 
 export const MUST_HAVE_OPTIONS = [
-  'Aircon',
-  'Big tables',
-  'Quiet',
-  'Halal-cert',
-  'Parking',
+  { label: 'Quiet', value: 'Quiet' },
+  { label: 'Air-conditioned', value: 'Aircon' },
+  { label: 'Parking', value: 'Parking' },
+  { label: 'Large group seating', value: 'Big tables' },
 ]
 
-export const AVOID_OPTIONS = ['Crowded', 'Loud', 'Stairs']
+export const AVOID_OPTIONS = [
+  { label: 'Crowded places', value: 'Crowded' },
+  { label: 'Loud places', value: 'Loud' },
+  { label: 'Stairs', value: 'Stairs' },
+]
 
 export const EMPTY_PERSON = {
   name: '',
@@ -71,6 +128,7 @@ export const EMPTY_PERSON = {
   cuisine_loves: [],
   must_have: [],
   avoid: [],
+  notes: '',
 }
 
 export const DEMO_PERSONS = [
