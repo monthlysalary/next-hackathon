@@ -1,8 +1,52 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import PersonCard from './PersonCard'
 import { EMPTY_PERSON } from '@/lib/constants'
 import { FREE_MAX_PERSONS } from '@/lib/planLimits'
+
+const FRIENDS_KEY = 'tablefor_saved_friends'
+
+function getSavedFriends() {
+  try {
+    const data = localStorage.getItem(FRIENDS_KEY)
+    return data ? JSON.parse(data) : []
+  } catch {
+    return []
+  }
+}
+
+function saveFriend(person) {
+  if (!person.name.trim()) return
+  const friends = getSavedFriends()
+  // Update existing or add new
+  const idx = friends.findIndex(
+    (f) => f.name.toLowerCase() === person.name.toLowerCase(),
+  )
+  const entry = {
+    name: person.name,
+    location: person.location,
+    budget: person.budget,
+    dietary: person.dietary,
+    cuisine_loves: person.cuisine_loves,
+    must_have: person.must_have,
+    avoid: person.avoid || [],
+  }
+  if (idx >= 0) {
+    friends[idx] = entry
+  } else {
+    friends.push(entry)
+  }
+  localStorage.setItem(FRIENDS_KEY, JSON.stringify(friends))
+}
+
+function removeSavedFriend(name) {
+  const friends = getSavedFriends()
+  const filtered = friends.filter(
+    (f) => f.name.toLowerCase() !== name.toLowerCase(),
+  )
+  localStorage.setItem(FRIENDS_KEY, JSON.stringify(filtered))
+}
 
 export default function GroupSetup({
   groupName,
@@ -20,7 +64,7 @@ export default function GroupSetup({
   hasSavedSession,
   userSessions = [],
   onLoadUserSession,
-  onDeleteUserSession,
+  onDeleteSession,
   loadingSessionId,
   isSignedIn = false,
   onSignIn,
@@ -32,6 +76,33 @@ export default function GroupSetup({
     const next = [...persons]
     next[index] = person
     setPersons(next)
+  }
+
+  const [savedFriends, setSavedFriends] = useState([])
+  const [showFriendPicker, setShowFriendPicker] = useState(false)
+
+  useEffect(() => {
+    setSavedFriends(getSavedFriends())
+  }, [])
+
+  // Save all named persons as friends whenever a search is triggered
+  const handleFind = () => {
+    persons.forEach((p) => {
+      if (p.name.trim()) saveFriend(p)
+    })
+    setSavedFriends(getSavedFriends())
+    onFind()
+  }
+
+  const addFriend = (friend) => {
+    if (persons.length >= maxPersons) return
+    setPersons([...persons, { ...friend }])
+    setShowFriendPicker(false)
+  }
+
+  const deleteFriend = (name) => {
+    removeSavedFriend(name)
+    setSavedFriends(getSavedFriends())
   }
 
   const addPerson = () => {
@@ -119,12 +190,14 @@ export default function GroupSetup({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onDeleteUserSession?.(session.session_id)}
-                  className="p-2 rounded-full hover:bg-red-50 text-text-secondary hover:text-red-500 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeleteSession?.(session.session_id)
+                  }}
+                  className="px-2 py-2 text-text-secondary hover:text-red-500 text-xs transition-colors"
                   title="Delete session"
-                  aria-label={`Delete session ${session.group_name || 'Dining session'}`}
                 >
-                  🗑️
+                  ✕
                 </button>
               </div>
             ))}
@@ -220,17 +293,92 @@ export default function GroupSetup({
               onChange={updatePerson}
               onRemove={removePerson}
               canRemove={persons.length > 2}
+              onSaveFriend={(p) => {
+                saveFriend(p)
+                setSavedFriends(getSavedFriends())
+              }}
             />
           ))}
         </div>
         {persons.length < maxPersons ? (
-          <button
-            type="button"
-            onClick={addPerson}
-            className="mt-3 w-full px-3 py-3 text-xs border border-dashed border-border rounded-[14px] text-text-secondary hover:text-accent hover:border-accent transition-colors"
-          >
-            + Add person
-          </button>
+          <div className="mt-3 relative">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={addPerson}
+                className="flex-1 px-3 py-3 text-xs border border-dashed border-border rounded-[14px] text-text-secondary hover:text-accent hover:border-accent transition-colors"
+              >
+                + Add person
+              </button>
+              {savedFriends.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowFriendPicker(!showFriendPicker)}
+                  className={`px-3 py-3 text-xs border rounded-[14px] transition-colors ${
+                    showFriendPicker
+                      ? 'border-accent text-accent bg-orange-50'
+                      : 'border-border text-text-secondary hover:text-accent hover:border-accent'
+                  }`}
+                >
+                  👥 Friends
+                </button>
+              )}
+            </div>
+            {showFriendPicker && savedFriends.length > 0 && (
+              <div className="mt-2 bg-white border border-border rounded-[14px] shadow-card overflow-hidden">
+                <div className="px-3 py-2 border-b border-border">
+                  <p className="text-[10px] text-text-secondary font-medium uppercase tracking-wider">
+                    Add a saved friend
+                  </p>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto">
+                  {savedFriends
+                    .filter(
+                      (f) =>
+                        !persons.some(
+                          (p) => p.name.toLowerCase() === f.name.toLowerCase(),
+                        ),
+                    )
+                    .map((friend) => (
+                      <div
+                        key={friend.name}
+                        className="flex items-center justify-between px-3 py-2.5 hover:bg-surface-raised transition-colors"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => addFriend(friend)}
+                          className="flex-1 text-left"
+                        >
+                          <p className="text-xs font-medium text-text-primary">
+                            {friend.name}
+                          </p>
+                          <p className="text-[10px] text-text-secondary">
+                            {friend.location || 'No location'} · {friend.budget}
+                          </p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteFriend(friend.name)}
+                          className="text-[10px] text-text-secondary hover:text-red-500 px-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  {savedFriends.filter(
+                    (f) =>
+                      !persons.some(
+                        (p) => p.name.toLowerCase() === f.name.toLowerCase(),
+                      ),
+                  ).length === 0 && (
+                    <p className="px-3 py-2.5 text-[11px] text-text-secondary">
+                      All saved friends are already in the group
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         ) : !isPro ? (
           <button
             type="button"
@@ -245,7 +393,7 @@ export default function GroupSetup({
       {/* Find button */}
       <button
         type="button"
-        onClick={onFind}
+        onClick={handleFind}
         disabled={!canFind || loading}
         className="w-full py-4 rounded-[16px] bg-accent hover:bg-accent-hover text-white font-semibold text-[17px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >

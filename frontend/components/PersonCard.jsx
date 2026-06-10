@@ -46,11 +46,12 @@ function PillGroup({ options, selected, onChange, multi = true }) {
   )
 }
 
-export default function PersonCard({ person, index, onChange, onRemove, canRemove }) {
+export default function PersonCard({ person, index, onChange, onRemove, canRemove, onSaveFriend }) {
   const [suggestions, setSuggestions] = useState([])
   const [locationError, setLocationError] = useState(null)
   const [gpsLoading, setGpsLoading] = useState(false)
   const [expanded, setExpanded] = useState(index < 2)
+  const [saved, setSaved] = useState(false)
   const debounceRef = useRef(null)
 
   const update = (field, value) => {
@@ -286,6 +287,24 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
               onChange={(v) => update('avoid', v)}
             />
           </div>
+
+          {person.name.trim() && (
+            <button
+              type="button"
+              onClick={() => {
+                onSaveFriend?.(person)
+                setSaved(true)
+                setTimeout(() => setSaved(false), 2000)
+              }}
+              className={`w-full px-3 py-2 text-[11px] font-medium rounded-[12px] transition-colors ${
+                saved
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : 'bg-surface-raised text-text-secondary border border-border hover:border-accent hover:text-accent'
+              }`}
+            >
+              {saved ? '✓ Remembered!' : '💾 Remember this friend'}
+            </button>
+          )}
         </div>
       )}
     </div>
