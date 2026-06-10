@@ -12,11 +12,10 @@ from backend.models import AgentResponse, GroupRequest, RefineRequest, Restauran
 
 # Tried in order until one works. Claude 4.x Sonnet is the sweet spot for this agent.
 DEFAULT_BEDROCK_MODELS = [
-    "anthropic.claude-sonnet-4-5-20250929-v1:0",
-    "anthropic.claude-sonnet-4-6",
-    "anthropic.claude-haiku-4-5-20251001-v1:0",
-    "anthropic.claude-opus-4-5-20251101-v1:0",
-    "anthropic.claude-opus-4-6-v1",
+    "us.amazon.nova-lite-v1:0",
+    "us.amazon.nova-pro-v1:0",
+    "us.anthropic.claude-sonnet-4-20250514-v1:0",
+    "us.anthropic.claude-haiku-4-20250514-v1:0",
     "amazon.nova-lite-v1:0",
     "amazon.nova-pro-v1:0",
 ]
@@ -97,6 +96,13 @@ YOUR TASKS:
      whose cuisine matches each person's cuisine_loves (including custom cuisines
      like Vietnamese). Only pick non-matching cuisines if no good match exists
      in the search results.
+   - CUISINE PREFERENCES ARE CRITICAL: Only recommend restaurants whose
+     primary cuisine matches what the group wants. If the group chose
+     "Chinese" and "Malay", do NOT recommend Japanese/Korean/Western.
+     If "Any" is selected, you have freedom.
+   - MEAL TYPE IS CRITICAL: A "breakfast" search must return breakfast spots,
+     NOT dinner restaurants. A "drinks" search must return bars/cafes, NOT
+     full restaurants. Match the venue type to the meal.
 
 3. For each restaurant extract or infer these tags.
    Use "unknown" if not clearly mentioned:
@@ -461,10 +467,12 @@ def _build_restaurants(parsed: dict, midpoint_area: str) -> list[RestaurantResul
 
 def _enrich_restaurants(parsed: dict) -> None:
     """Add photo URLs, opening hours, and reservation links to restaurant results."""
-    for restaurant in parsed.get("restaurants", []):
+    import concurrent.futures
+
+    def enrich_one(restaurant):
         name = restaurant.get("name", "")
         if not name:
-            continue
+            return
 
         # Search for deals if none found
         if not restaurant.get("deal"):
@@ -489,6 +497,15 @@ def _enrich_restaurants(parsed: dict) -> None:
             reservation_url = exa_search.search_reservation_url(name)
             if reservation_url:
                 restaurant["reservation_url"] = reservation_url
+
+    restaurants = parsed.get("restaurants", [])
+    if not restaurants:
+        return
+
+    # Run all enrichments in parallel (one thread per restaurant) with timeout
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(enrich_one, r) for r in restaurants]
+        concurrent.futures.wait(futures, timeout=8)  # 8 second max for enrichment
 
 
 async def run_agent(request: GroupRequest) -> AgentResponse:
@@ -596,8 +613,19 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
 async def refine_results(refine_request: RefineRequest) -> AgentResponse:
     """Re-run the agent with user's adjustment message."""
     session = dynamo.get_session(refine_request.session_id)
+
+    # If session not found in backend, build it from request context
     if not session:
-        raise ValueError("Session not found")
+        if refine_request.persons:
+            session = {
+                "persons": [p.model_dump() for p in refine_request.persons],
+                "meal_type": refine_request.meal_type or "dinner",
+                "day": refine_request.day or "today",
+                "suggested_area": refine_request.suggested_area or "Bishan",
+                "group_name": refine_request.group_name or "Our Group",
+            }
+        else:
+            raise ValueError("Session not found and no context provided")
 
     # Get the midpoint area from session
     midpoint_area = session.get("suggested_area", "Bishan")

@@ -10,9 +10,8 @@ html {
 body {
   margin: 0;
   background-color: #fdf6f0;
-  color: #1a1a1a;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, sans-serif;
+  color: #2c1810;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
   height: 100%;
@@ -42,7 +41,7 @@ body {
   scrollbar-color: #f28155 #f5ede8;
 }
 
-/* Phone frame scrollbar inside the app */
+/* Phone frame scrollbar */
 .phone-scroll::-webkit-scrollbar {
   width: 10px;
 }
@@ -81,11 +80,11 @@ body {
 /* Mapbox overrides */
 .mapboxgl-popup-content {
   background: #ffffff !important;
-  color: #1a1a1a !important;
-  border: 1px solid #e8ddd8;
+  color: #2c1810 !important;
+  border: 1px solid #e8ddd4;
   border-radius: 12px;
   padding: 10px 14px;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  box-shadow: 0 2px 16px rgba(44,24,16,0.06);
 }
 .mapboxgl-popup-tip {
   border-top-color: #ffffff !important;

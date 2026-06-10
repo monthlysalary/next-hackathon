@@ -390,26 +390,65 @@ def search_reservation_url(restaurant_name: str) -> str | None:
     return None
 
 
+MENU_DOMAINS = [
+    "grab.com",
+    "food.grab.com",
+    "foodpanda.sg",
+    "deliveroo.com.sg",
+    "burpple.com",
+    "hungrygowhere.com",
+    "foodadvisor.com.sg",
+    "eatbook.sg",
+    "sethlui.com",
+    "misstamchiak.com",
+    "danielfooddiary.com",
+    "tripadvisor.com.sg",
+    "oddle.me",
+    "chope.co",
+]
+
+
 def search_menu(restaurant_name: str) -> dict | None:
     """Search for a restaurant's menu items and prices via Exa, then use Bedrock to extract a clean menu."""
-    query = f"{restaurant_name} Singapore menu prices"
-    results = search_with_cache(
-        query,
-        num_results=3,
-        include_domains=RESTAURANT_DOMAINS + ["grab.com", "foodpanda.sg", "deliveroo.com.sg"],
-    )
 
-    if not results:
+    # Try multiple queries for better coverage
+    queries = [
+        f"{restaurant_name} Singapore full menu prices items",
+        f"{restaurant_name} Singapore food delivery menu",
+    ]
+
+    all_results = []
+    for query in queries:
+        results = search_with_cache(
+            query,
+            num_results=4,
+            include_domains=MENU_DOMAINS,
+        )
+        all_results.extend(results)
+        if len(all_results) >= 5:
+            break
+
+    # Deduplicate
+    seen_urls = set()
+    unique_results = []
+    for r in all_results:
+        url = r.get("url", "")
+        if url not in seen_urls:
+            seen_urls.add(url)
+            unique_results.append(r)
+
+    if not unique_results:
         return None
 
     # Combine raw text from search results
     raw_text = ""
     source_url = None
-    for r in results:
+    for r in unique_results:
         text = r.get("text", "")
         url = r.get("url", "")
+        title = r.get("title", "")
         if text:
-            raw_text += text + "\n\n"
+            raw_text += f"SOURCE: {title} ({url})\n{text}\n\n"
             if not source_url:
                 source_url = url
 
@@ -419,24 +458,27 @@ def search_menu(restaurant_name: str) -> dict | None:
     # Use Bedrock to extract a clean, accurate menu
     from backend.agent import _call_bedrock
 
-    prompt = f"""Extract the menu items and prices for "{restaurant_name}" from the following web search results.
+    prompt = f"""Extract the menu items and prices for "{restaurant_name}" in Singapore from the following web search results.
+These results come from food delivery platforms, review sites, and restaurant listings.
 
 RAW SEARCH DATA:
-{raw_text[:3000]}
+{raw_text[:4000]}
 
 RULES:
 - Only include items that are clearly from this restaurant's menu
 - Format each item as: "Item Name — S$X.XX" (use Singapore dollars)
 - If a price range applies, use "S$X–Y"
+- Include dish descriptions briefly if available (e.g. "Nasi Goreng (fried rice with egg) — S$8.50")
 - Do NOT invent items or prices — only use what's in the data
 - If you cannot find real menu items, return an empty list
-- Maximum 12 items
-- Sort by category (mains first, then sides, drinks, desserts)
+- Maximum 15 items
+- Group by category: Mains, Sides/Snacks, Drinks, Desserts
+- If the data contains a delivery platform menu (GrabFood, Foodpanda, Deliveroo), prioritize that as it's most accurate
 
 Return ONLY valid JSON:
 {{
   "menu_items": ["Item — S$X.XX", ...],
-  "note": "Brief one-line note about the menu (e.g. price date, special info)"
+  "note": "Brief one-line note about the menu (e.g. source, price date)"
 }}"""
 
     try:
@@ -455,7 +497,7 @@ Return ONLY valid JSON:
 
         return {
             "restaurant_name": restaurant_name,
-            "menu_items": menu_items[:12],
+            "menu_items": menu_items[:15],
             "source_url": source_url,
             "note": parsed.get("note", "Prices may vary. Check the source link for the latest menu."),
         }
@@ -463,7 +505,7 @@ Return ONLY valid JSON:
         print(f"Bedrock menu extraction failed for {restaurant_name}: {e}")
         # Fallback to raw extraction
         menu_items = []
-        for r in results:
+        for r in unique_results:
             for line in r.get("text", "").split("\n"):
                 line = line.strip()
                 if "$" in line and 5 < len(line) < 200:

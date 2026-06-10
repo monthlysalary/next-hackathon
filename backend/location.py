@@ -419,6 +419,7 @@ def _station_connectivity_score(station_name: str) -> float:
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     """Calculate distance in km between two points."""
     R = 6371.0
+    lat1, lng1, lat2, lng2 = float(lat1), float(lng1), float(lat2), float(lng2)
     dlat = math.radians(lat2 - lat1)
     dlng = math.radians(lng2 - lng1)
     a = (

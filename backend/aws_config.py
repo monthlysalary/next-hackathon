@@ -37,10 +37,32 @@ if not VERIFY_SSL:
         _original_send = requests.adapters.HTTPAdapter.send
 
         def _patched_send(self, request, **kwargs):
-            kwargs.setdefault("verify", False)
+            kwargs["verify"] = False
             return _original_send(self, request, **kwargs)
 
         requests.adapters.HTTPAdapter.send = _patched_send
+    except ImportError:
+        pass
+
+    # Patch httpx (used by Exa SDK) to disable SSL verification
+    try:
+        import httpx
+
+        _original_httpx_client_init = httpx.Client.__init__
+
+        def _patched_httpx_client_init(self, *args, **kwargs):
+            kwargs.setdefault("verify", False)
+            _original_httpx_client_init(self, *args, **kwargs)
+
+        httpx.Client.__init__ = _patched_httpx_client_init
+
+        _original_httpx_async_init = httpx.AsyncClient.__init__
+
+        def _patched_httpx_async_init(self, *args, **kwargs):
+            kwargs.setdefault("verify", False)
+            _original_httpx_async_init(self, *args, **kwargs)
+
+        httpx.AsyncClient.__init__ = _patched_httpx_async_init
     except ImportError:
         pass
 

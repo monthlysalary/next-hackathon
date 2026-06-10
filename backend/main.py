@@ -83,6 +83,9 @@ async def refine_restaurants(request: RefineRequest):
         return await agent.refine_results(request)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"Refine error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Refine failed: {type(e).__name__}: {e}")
 
 
 @app.post("/vote")
@@ -269,6 +272,34 @@ def list_areas():
 @app.post("/gps-area")
 def gps_area(body: GpsRequest):
     return location.resolve_gps_area(body.latitude, body.longitude)
+
+
+@app.get("/menu/{restaurant_name:path}")
+def get_menu(restaurant_name: str):
+    """Search for a restaurant's menu. Returns empty if not found."""
+    menu_data = exa_search.search_menu(restaurant_name)
+    if not menu_data or not menu_data.get("menu_items"):
+        return {
+            "restaurant_name": restaurant_name,
+            "menu_items": [],
+            "source_url": None,
+            "note": None,
+        }
+    return menu_data
+
+
+@app.get("/menu/{restaurant_name}")
+def get_menu(restaurant_name: str):
+    """Search for a restaurant's menu."""
+    menu_data = exa_search.search_menu(restaurant_name)
+    if not menu_data:
+        return {
+            "restaurant_name": restaurant_name,
+            "menu_items": ["No menu found for this restaurant."],
+            "source_url": None,
+            "note": "",
+        }
+    return menu_data
 
 
 @app.post("/create-checkout")

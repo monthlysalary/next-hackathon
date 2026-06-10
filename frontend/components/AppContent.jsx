@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import WelcomeScreen from './WelcomeScreen'
 import GroupSetup from './GroupSetup'
 import ResultsPanel from './ResultsPanel'
 import SessionHome from './SessionHome'
@@ -16,7 +17,7 @@ import {
   todayDateString,
   normalizeDay,
 } from '@/lib/constants'
-import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro } from '@/lib/userDb'
+import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro, deleteUserSession } from '@/lib/userDb'
 import {
   FREE_MAX_PERSONS,
   PRO_MAX_PERSONS,
@@ -41,6 +42,22 @@ const SESSION_KEY = 'tablefor_session_id'
 const VOTER_KEY = 'tablefor_voter_name'
 const PRO_KEY = 'tablefor_pro'
 const SUBSCRIPTION_KEY = 'tablefor_subscription_id'
+const CACHE_VERSION_KEY = 'tablefor_cache_version'
+const CURRENT_CACHE_VERSION = '2'
+
+// Clear all stale data when cache version changes
+if (typeof window !== 'undefined') {
+  const storedVersion = localStorage.getItem(CACHE_VERSION_KEY)
+  if (storedVersion !== CURRENT_CACHE_VERSION) {
+    const keysToRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('tablefor_')) keysToRemove.push(key)
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k))
+    localStorage.setItem(CACHE_VERSION_KEY, CURRENT_CACHE_VERSION)
+  }
+}
 
 const DIETARY_MAP = {
   Halal: 'halal',
@@ -203,14 +220,20 @@ export default function AppContent() {
     setError(null)
     try {
       let data = null
-      const res = await fetch(`${API_URL}/group/${sessionId}`)
-      if (res.ok) {
-        data = await res.json()
-      } else {
+      // Try session endpoint first
+      try {
         const sessionRes = await fetch(`${API_URL}/session/${sessionId}`)
         if (sessionRes.ok) {
           data = await sessionRes.json()
         }
+      } catch { /* backend unreachable — try fallbacks */ }
+
+      // Try group endpoint as fallback
+      if (!data) {
+        try {
+          const groupRes = await fetch(`${API_URL}/group/${sessionId}`)
+          if (groupRes.ok) data = await groupRes.json()
+        } catch { /* group endpoint may not exist */ }
       }
 
       if (!data && user) {
@@ -256,7 +279,14 @@ export default function AppContent() {
         setIsHost(isGroupHost || !join)
       }
     } catch (e) {
-      setError(e.message || 'Could not load group')
+      // Only show errors that aren't simple network failures
+      const msg = e.message || ''
+      if (msg !== 'Failed to fetch' && msg !== 'NetworkError when attempting to fetch resource.') {
+        setError(msg || 'Could not load group')
+      } else {
+        // Backend unreachable — silently go to setup
+        setView('setup')
+      }
     } finally {
       setLoadingSessionId(null)
     }
@@ -480,9 +510,6 @@ export default function AppContent() {
     if (view !== 'results' || !result?.session_id) return
     if (result.session_id === 'demo-session') return
 
-    const params = new URLSearchParams(window.location.search)
-    const isSharedSession = params.get('session') === result.session_id
-
     const poll = async () => {
       try {
         const res = await fetch(`${API_URL}/votes/${result.session_id}`)
@@ -497,8 +524,7 @@ export default function AppContent() {
     }
 
     poll()
-    if (!isSharedSession) return
-    const interval = setInterval(poll, 15000)
+    const interval = setInterval(poll, 5000)
     return () => clearInterval(interval)
   }, [view, result?.session_id])
 
@@ -635,7 +661,13 @@ export default function AppContent() {
       skipResultsRedirectRef.current = false
       setView('results')
     } catch (e) {
-      setError(e.message)
+      console.error('[TableFor] Find error:', e)
+      const msg = e.message || 'Something went wrong'
+      if (msg === 'Failed to fetch' || msg === 'NetworkError when attempting to fetch resource.') {
+        setError('Cannot reach the server. Make sure the backend is running on ' + API_URL)
+      } else {
+        setError(msg)
+      }
     } finally {
       findInProgressRef.current = false
       setLoading(false)
@@ -653,18 +685,35 @@ export default function AppContent() {
         body: JSON.stringify({
           session_id: result.session_id,
           message,
+          // Send context so refine works even if backend lost the session
+          persons: persons.map((p) => ({
+            ...p,
+            dietary: (p.dietary || []).map((d) => DIETARY_MAP[d] || (d || '').toLowerCase()),
+            cuisine_loves: (p.cuisine_loves || []).map((c) => (c || '').toLowerCase()),
+            must_have: (p.must_have || []).map((m) => MUST_HAVE_MAP[m] || (m || '').toLowerCase()),
+            avoid: (p.avoid || []).map((a) => (a || '').toLowerCase()),
+          })),
+          meal_type: mealType,
+          day: day,
+          suggested_area: result.suggested_area,
+          group_name: groupName,
         }),
       })
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Failed to refine results')
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || `Server error (${res.status})`)
       }
       const data = await res.json()
-      setResult(data)
-      setVotes({})
-      setVoters([])
+      // Store AI suggestions separately — don't override existing results
+      setAiSuggestions(data.restaurants || [])
     } catch (e) {
-      setError(e.message)
+      console.error('[TableFor] Refine error:', e)
+      const msg = e.message || 'Something went wrong'
+      if (msg === 'Failed to fetch' || msg === 'NetworkError when attempting to fetch resource.') {
+        setError('Cannot reach the server. Make sure the backend is running on ' + API_URL)
+      } else {
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }
@@ -729,6 +778,7 @@ export default function AppContent() {
     setJoinMode(false)
     setIsHost(true)
     setJoinSlotIndex(null)
+    setGroupSessionId(null)
     groupCreatedRef.current = false
 
     const params = new URLSearchParams(window.location.search)
@@ -996,6 +1046,14 @@ export default function AppContent() {
           setPersons={setPersons}
           onFind={handleFind}
           loading={loading}
+          onContinueSession={handleContinueSession}
+          hasSavedSession={hasSavedSession}
+          userSessions={userSessions}
+          onLoadUserSession={loadSession}
+          onDeleteSession={handleDeleteSession}
+          loadingSessionId={loadingSessionId}
+          isSignedIn={Boolean(user)}
+          onSignIn={() => setAuthOpen(true)}
           isPro={isPro}
           onUpgrade={handleUpgrade}
           maxPersons={isPro ? PRO_MAX_PERSONS : FREE_MAX_PERSONS}
@@ -1018,6 +1076,7 @@ export default function AppContent() {
           onRestaurantSaved={handleRestaurantSaved}
           onRefine={handleRefine}
           loading={loading}
+          aiSuggestions={aiSuggestions}
           votes={votes}
           voters={voters}
           voterName={voterName}
