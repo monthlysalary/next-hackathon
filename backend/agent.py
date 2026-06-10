@@ -12,11 +12,10 @@ from backend.models import AgentResponse, GroupRequest, RefineRequest, Restauran
 
 # Tried in order until one works. Claude 4.x Sonnet is the sweet spot for this agent.
 DEFAULT_BEDROCK_MODELS = [
-    "anthropic.claude-sonnet-4-5-20250929-v1:0",
-    "anthropic.claude-sonnet-4-6",
-    "anthropic.claude-haiku-4-5-20251001-v1:0",
-    "anthropic.claude-opus-4-5-20251101-v1:0",
-    "anthropic.claude-opus-4-6-v1",
+    "us.amazon.nova-lite-v1:0",
+    "us.amazon.nova-pro-v1:0",
+    "us.anthropic.claude-sonnet-4-20250514-v1:0",
+    "us.anthropic.claude-haiku-4-20250514-v1:0",
     "amazon.nova-lite-v1:0",
     "amazon.nova-pro-v1:0",
 ]
