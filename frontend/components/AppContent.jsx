@@ -11,7 +11,7 @@ import {
   DEMO_PERSONS,
   DEMO_RESULT,
 } from '@/lib/constants'
-import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro } from '@/lib/userDb'
+import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro, deleteUserSession } from '@/lib/userDb'
 import {
   FREE_MAX_PERSONS,
   PRO_MAX_PERSONS,
@@ -423,6 +423,17 @@ export default function AppContent() {
     if (sessionId) loadSession(sessionId)
   }
 
+  const handleDeleteSession = async (sessionId) => {
+    if (!user) return
+    await deleteUserSession(user.id, sessionId)
+    setUserSessions((prev) => prev.filter((s) => s.session_id !== sessionId))
+    // Clear local storage if deleting the current session
+    if (localStorage.getItem(SESSION_KEY) === sessionId) {
+      localStorage.removeItem(SESSION_KEY)
+      setHasSavedSession(false)
+    }
+  }
+
   const handleUpgrade = async () => {
     try {
       const res = await fetch(`${API_URL}/create-checkout`, { method: 'POST' })
@@ -571,6 +582,7 @@ export default function AppContent() {
           hasSavedSession={hasSavedSession}
           userSessions={userSessions}
           onLoadUserSession={loadSession}
+          onDeleteSession={handleDeleteSession}
           loadingSessionId={loadingSessionId}
           isSignedIn={Boolean(user)}
           onSignIn={() => setAuthOpen(true)}

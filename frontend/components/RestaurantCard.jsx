@@ -83,6 +83,9 @@ export default function RestaurantCard({
   const [saving, setSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(saved)
   const [imgError, setImgError] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuData, setMenuData] = useState(null)
+  const [menuLoading, setMenuLoading] = useState(false)
 
   // Determine best image: use photo_url if provided, otherwise cuisine-based Unsplash image
   const imageUrl = (restaurant.photo_url && !imgError)
@@ -101,6 +104,31 @@ export default function RestaurantCard({
       onSaved?.(restaurant.name)
     } catch { /* ignore */ } finally {
       setSaving(false)
+    }
+  }
+
+  const handleViewMenu = async () => {
+    if (menuData) {
+      setMenuOpen(!menuOpen)
+      return
+    }
+
+    setMenuLoading(true)
+    setMenuOpen(true)
+    try {
+      const res = await fetch(
+        `${API_URL}/menu/${encodeURIComponent(restaurant.name)}`,
+      )
+      if (res.ok) {
+        const data = await res.json()
+        setMenuData(data)
+      } else {
+        setMenuData({ menu_items: ['No menu found for this restaurant.'], note: '' })
+      }
+    } catch {
+      setMenuData({ menu_items: ['No menu found for this restaurant.'], note: '' })
+    } finally {
+      setMenuLoading(false)
     }
   }
 
@@ -243,6 +271,50 @@ export default function RestaurantCard({
             {isSaved ? 'Saved ✓' : saving ? '...' : 'Save'}
           </button>
         </div>
+
+        {/* Menu panel */}
+        {menuOpen && (
+          <div className="mt-3 bg-purple-50 border border-purple-200 rounded-[14px] p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-[11px] font-semibold text-purple-700 uppercase tracking-wider">
+                📋 Menu
+              </h4>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                className="text-[10px] text-purple-400 hover:text-purple-600"
+              >
+                ✕
+              </button>
+            </div>
+            {menuLoading ? (
+              <p className="text-[11px] text-purple-500 animate-pulse">Loading menu...</p>
+            ) : menuData ? (
+              <>
+                <ul className="space-y-1 mb-2">
+                  {menuData.menu_items.map((item, i) => (
+                    <li key={i} className="text-[11px] text-text-primary leading-relaxed">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                {menuData.note && (
+                  <p className="text-[10px] text-purple-500 italic">{menuData.note}</p>
+                )}
+                {menuData.source_url && (
+                  <a
+                    href={menuData.source_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-purple-600 hover:underline mt-1 inline-block"
+                  >
+                    View full menu →
+                  </a>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   )
