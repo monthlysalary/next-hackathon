@@ -348,6 +348,10 @@ export default function GroupSetup({
             onRemove={removePerson}
             canRemove={!joinMode && persons.length > 2}
             completed={personCompleted[wizardIndex]}
+            onSaveFriend={(p) => {
+              saveFriend(p)
+              setSavedFriends(getSavedFriends())
+            }}
             onComplete={(finalPerson) => {
               updatePerson(wizardIndex, finalPerson)
               setPersonCompleted((prev) => {

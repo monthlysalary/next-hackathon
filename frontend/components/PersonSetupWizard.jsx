@@ -294,11 +294,13 @@ export default function PersonSetupWizard({
   completed,
   onComplete,
   onModify,
+  onSaveFriend,
 }) {
   const dietaryRef = useRef(null)
   const cuisineRef = useRef(null)
   const notesRef = useRef(person.notes || '')
   const [localName, setLocalName] = useState(person.name)
+  const [friendSaved, setFriendSaved] = useState(false)
 
   // Sync localName when person changes externally
   useEffect(() => {
@@ -388,6 +390,24 @@ export default function PersonSetupWizard({
         >
           Modify preferences
         </button>
+
+        {onSaveFriend && person.name.trim() && (
+          <button
+            type="button"
+            onClick={() => {
+              onSaveFriend(person)
+              setFriendSaved(true)
+              setTimeout(() => setFriendSaved(false), 2000)
+            }}
+            className={`w-full mt-2 py-3 rounded-[14px] text-sm font-medium transition-colors ${
+              friendSaved
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-surface-raised text-text-secondary border border-border hover:border-accent hover:text-accent'
+            }`}
+          >
+            {friendSaved ? '✓ Remembered!' : '💾 Remember this friend'}
+          </button>
+        )}
       </div>
     )
   }
