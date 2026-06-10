@@ -285,6 +285,20 @@ def get_menu(restaurant_name: str):
     return menu_data
 
 
+@app.get("/menu/{restaurant_name}")
+def get_menu(restaurant_name: str):
+    """Search for a restaurant's menu."""
+    menu_data = exa_search.search_menu(restaurant_name)
+    if not menu_data:
+        return {
+            "restaurant_name": restaurant_name,
+            "menu_items": ["No menu found for this restaurant."],
+            "source_url": None,
+            "note": "",
+        }
+    return menu_data
+
+
 @app.post("/create-checkout")
 def create_checkout():
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")

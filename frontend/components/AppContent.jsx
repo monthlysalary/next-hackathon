@@ -14,7 +14,7 @@ import {
   todayDateString,
   normalizeDay,
 } from '@/lib/constants'
-import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro } from '@/lib/userDb'
+import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro, deleteUserSession } from '@/lib/userDb'
 import {
   FREE_MAX_PERSONS,
   PRO_MAX_PERSONS,
@@ -102,6 +102,7 @@ export default function AppContent() {
   const [isHost, setIsHost] = useState(true)
   const [joinSlotIndex, setJoinSlotIndex] = useState(null)
   const [inviteCopied, setInviteCopied] = useState(false)
+  const [aiSuggestions, setAiSuggestions] = useState([])
   const groupCreatedRef = useRef(false)
 
   const applyGroupData = useCallback((data) => {
@@ -570,9 +571,8 @@ export default function AppContent() {
         throw new Error(err.detail || 'Failed to refine results')
       }
       const data = await res.json()
-      setResult(data)
-      setVotes({})
-      setVoters([])
+      // Store AI suggestions separately — don't override existing results
+      setAiSuggestions(data.restaurants || [])
     } catch (e) {
       setError(e.message)
     } finally {
@@ -666,6 +666,17 @@ export default function AppContent() {
   const handleContinueSession = () => {
     const sessionId = localStorage.getItem(SESSION_KEY)
     if (sessionId) loadSession(sessionId)
+  }
+
+  const handleDeleteSession = async (sessionId) => {
+    if (!user) return
+    await deleteUserSession(user.id, sessionId)
+    setUserSessions((prev) => prev.filter((s) => s.session_id !== sessionId))
+    // Clear local storage if deleting the current session
+    if (localStorage.getItem(SESSION_KEY) === sessionId) {
+      localStorage.removeItem(SESSION_KEY)
+      setHasSavedSession(false)
+    }
   }
 
   const handleUpgrade = async () => {
@@ -832,6 +843,7 @@ export default function AppContent() {
           hasSavedSession={hasSavedSession}
           userSessions={userSessions}
           onLoadUserSession={loadSession}
+          onDeleteSession={handleDeleteSession}
           loadingSessionId={loadingSessionId}
           isSignedIn={Boolean(user)}
           onSignIn={() => setAuthOpen(true)}
@@ -855,6 +867,7 @@ export default function AppContent() {
           onRestaurantSaved={handleRestaurantSaved}
           onRefine={handleRefine}
           loading={loading}
+          aiSuggestions={aiSuggestions}
           votes={votes}
           voters={voters}
           voterName={voterName}

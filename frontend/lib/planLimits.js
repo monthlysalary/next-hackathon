@@ -1,6 +1,6 @@
 export const FREE_MAX_PERSONS = 6
 export const PRO_MAX_PERSONS = 20
-export const FREE_DAILY_SESSIONS = 99
+export const FREE_DAILY_SESSIONS = 999
 
 export function getDailySearchKey() {
   return `tablefor_daily_${new Date().toISOString().slice(0, 10)}`
