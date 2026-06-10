@@ -532,19 +532,46 @@ export default function GroupSetup({
         ) : null}
       </div>
 
-      {joinMode && personCompleted[joinSlotIndex] && (
-        <p className="mb-3 text-xs text-text-secondary text-center">
-          You&apos;re all set! Waiting for the host to find restaurants.
-        </p>
-      )}
+      {/* Dietary conflict warnings */}
+      {(() => {
+        const warnings = []
+        const allDietary = persons.flatMap((p) => (p.dietary || []).map((d) => d.toLowerCase()))
+        const allCuisines = persons.flatMap((p) => (p.cuisine_loves || []).map((c) => c.toLowerCase()))
 
-      {isHost && canFind && (
-        <p className="mb-3 text-xs text-text-secondary text-center">
-          Ready to find restaurants
-        </p>
-      )}
+        // Halal person + someone wants pork-heavy cuisine
+        const hasHalal = allDietary.includes('halal')
+        const hasNoPork = allDietary.includes('no pork')
+        if ((hasHalal || hasNoPork) && allCuisines.includes('chinese')) {
+          const halalPerson = persons.find((p) => p.dietary?.some((d) => d.toLowerCase() === 'halal' || d.toLowerCase() === 'no pork'))
+          warnings.push(`⚠️ ${halalPerson?.name || 'Someone'} needs halal/no-pork, but Chinese cuisine often includes pork dishes. The AI will find halal-friendly Chinese options.`)
+        }
 
-      {isHost && (
+        // Vegetarian + seafood/meat-heavy cuisines
+        const hasVeg = allDietary.includes('veg') || allDietary.includes('vegetarian') || allDietary.includes('vegan')
+        if (hasVeg && (allCuisines.includes('korean') || allCuisines.includes('japanese'))) {
+          const vegPerson = persons.find((p) => p.dietary?.some((d) => ['veg', 'vegetarian', 'vegan'].includes(d.toLowerCase())))
+          warnings.push(`⚠️ ${vegPerson?.name || 'Someone'} is vegetarian, but Korean/Japanese cuisine is meat-heavy. Options may be limited.`)
+        }
+
+        // Budget mismatch
+        const budgets = persons.map((p) => p.budget).filter(Boolean)
+        if (budgets.includes('< S$10') && budgets.includes('> S$35')) {
+          warnings.push(`⚠️ Big budget gap in the group (< S$10 vs > S$35). The AI will target the lowest budget to keep it fair.`)
+        }
+
+        if (warnings.length === 0) return null
+        return (
+          <div className="mb-4 space-y-2">
+            {warnings.map((w, i) => (
+              <div key={i} className="px-3.5 py-2.5 bg-amber-50 border border-amber-200 rounded-[14px] text-[11px] text-amber-800">
+                {w}
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
+      {/* Find button */}
       <button
         type="button"
         onClick={handleFind}

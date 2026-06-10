@@ -371,6 +371,7 @@ export default function ResultsPanel({
                 onSaved={onRestaurantSaved}
                 voteCount={(votes[r.name] || []).length}
                 isWinner={(votes[r.name] || []).length === maxVotes && maxVotes > 0}
+                groupSize={persons.length}
               />
             ))}
           </div>

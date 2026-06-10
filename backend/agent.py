@@ -463,10 +463,12 @@ def _build_restaurants(parsed: dict, midpoint_area: str) -> list[RestaurantResul
 
 def _enrich_restaurants(parsed: dict) -> None:
     """Add photo URLs, opening hours, and reservation links to restaurant results."""
-    for restaurant in parsed.get("restaurants", []):
+    import concurrent.futures
+
+    def enrich_one(restaurant):
         name = restaurant.get("name", "")
         if not name:
-            continue
+            return
 
         # Search for deals if none found
         if not restaurant.get("deal"):
@@ -491,6 +493,15 @@ def _enrich_restaurants(parsed: dict) -> None:
             reservation_url = exa_search.search_reservation_url(name)
             if reservation_url:
                 restaurant["reservation_url"] = reservation_url
+
+    restaurants = parsed.get("restaurants", [])
+    if not restaurants:
+        return
+
+    # Run all enrichments in parallel (one thread per restaurant) with timeout
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(enrich_one, r) for r in restaurants]
+        concurrent.futures.wait(futures, timeout=8)  # 8 second max for enrichment
 
 
 async def run_agent(request: GroupRequest) -> AgentResponse:

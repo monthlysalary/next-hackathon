@@ -317,103 +317,10 @@ export default function AppContent() {
     }
   }, [user, profile?.is_pro])
 
-  // Host: create shareable group session once
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    if (params.get('join')) return
-    if (joinMode || groupSessionId || view !== 'setup' || groupCreatedRef.current) return
-
-    groupCreatedRef.current = true
-    ;(async () => {
-      try {
-        const data = await createGroup({
-          group_name: groupName,
-          meal_type: mealType,
-          day,
-          persons,
-        })
-        setGroupSessionId(data.session_id)
-        localStorage.setItem(getHostKey(data.session_id), 'true')
-        setIsHost(true)
-      } catch {
-        // Don't reset the ref — avoid infinite retry loops when backend is down.
-        // The group will be created lazily when the user hits "Find Matches".
-      }
-    })()
-  }, [joinMode, groupSessionId, view])
-
-  // Host: sync setup to backend
-  useEffect(() => {
-    if (!groupSessionId || !isHost || view !== 'setup' || joinMode) return
-
-    const controller = new AbortController()
-    const timer = setTimeout(async () => {
-      try {
-        await updateGroup(groupSessionId, {
-          group_name: groupName,
-          meal_type: mealType,
-          day,
-          persons,
-        })
-      } catch {
-        /* ignore sync errors — backend may be unavailable */
-      }
-    }, 800)
-
-    return () => {
-      clearTimeout(timer)
-      controller.abort()
-    }
-  }, [groupSessionId, isHost, joinMode, view, groupName, mealType, day, persons])
-
-  // Poll group for joiners (setup) or redirect when search completes
-  useEffect(() => {
-    if (!groupSessionId || view !== 'setup') return
-    // Only poll when in join mode (waiting for host) or when host has shared the link.
-    // Skip polling entirely when user is a solo host with no joiners — avoids
-    // noisy failed fetches when backend is unavailable.
-    if (!joinMode && !new URLSearchParams(window.location.search).get('join')) return
-
-    let cancelled = false
-
-    const poll = async () => {
-      if (cancelled) return
-      try {
-        const data = await fetchGroup(groupSessionId)
-        if (cancelled) return
-        if (isGroupSearchComplete(data)) {
-          applySearchResults(data)
-          return
-        }
-        setPersons((prev) =>
-          mergePersonsFromServer(
-            prev,
-            data.persons,
-            joinMode ? joinSlotIndex : null,
-          ),
-        )
-        if (data.group_name) setGroupName(data.group_name)
-        if (data.meal_type) setMealType(data.meal_type)
-        if (data.day) setDay(normalizeDay(data.day))
-      } catch {
-        /* ignore — backend might be unreachable */
-      }
-    }
-
-    poll()
-    const interval = setInterval(poll, 5000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [groupSessionId, view, joinMode, joinSlotIndex, applySearchResults])
-
+  // Poll votes every 5 seconds when on results view for live updates
   useEffect(() => {
     if (view !== 'results' || !result?.session_id) return
     if (result.session_id === 'demo-session') return
-
-    const params = new URLSearchParams(window.location.search)
-    const isSharedSession = params.get('session') === result.session_id
 
     const poll = async () => {
       try {
@@ -429,8 +336,7 @@ export default function AppContent() {
     }
 
     poll()
-    if (!isSharedSession) return
-    const interval = setInterval(poll, 15000)
+    const interval = setInterval(poll, 5000)
     return () => clearInterval(interval)
   }, [view, result?.session_id])
 
@@ -703,17 +609,6 @@ export default function AppContent() {
   const handleContinueSession = () => {
     const sessionId = localStorage.getItem(SESSION_KEY)
     if (sessionId) loadSession(sessionId)
-  }
-
-  const handleDeleteSession = async (sessionId) => {
-    if (!user) return
-    await deleteUserSession(user.id, sessionId)
-    setUserSessions((prev) => prev.filter((s) => s.session_id !== sessionId))
-    // Clear local storage if deleting the current session
-    if (localStorage.getItem(SESSION_KEY) === sessionId) {
-      localStorage.removeItem(SESSION_KEY)
-      setHasSavedSession(false)
-    }
   }
 
   const handleUpgrade = async () => {

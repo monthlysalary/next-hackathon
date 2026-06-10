@@ -112,6 +112,7 @@ export default function RestaurantCard({
   onSaved,
   voteCount = 0,
   isWinner = false,
+  groupSize = 2,
 }) {
   const [saving, setSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(saved)
@@ -122,7 +123,7 @@ export default function RestaurantCard({
 
   const imageUrl = (restaurant.photo_url && !imgError)
     ? restaurant.photo_url
-    : getCuisineImage(restaurant.cuisine, rank - 1)
+    : getCuisineImage(restaurant.cuisine)
 
   const handleSave = async () => {
     if (isSaved || saving) return
@@ -334,6 +335,28 @@ export default function RestaurantCard({
                 )}
               </>
             ) : null}
+          </div>
+        )}
+
+        {/* Cost splitting estimate */}
+        {restaurant.price_range && groupSize > 1 && (
+          <div className="mt-3 bg-green-50 border border-green-200 rounded-[14px] px-3 py-2.5">
+            <p className="text-[10px] text-green-700 font-medium mb-1">💰 Estimated cost split</p>
+            <p className="text-[11px] text-green-800">
+              {(() => {
+                // Parse price range like "S$8–14 per pax" or "S$10-20"
+                const match = restaurant.price_range.match(/\$(\d+)[–\-](\d+)/)
+                if (match) {
+                  const low = parseInt(match[1])
+                  const high = parseInt(match[2])
+                  const avgPerPax = (low + high) / 2
+                  const totalLow = low * groupSize
+                  const totalHigh = high * groupSize
+                  return `~S$${totalLow}–${totalHigh} total for ${groupSize} people (~S$${avgPerPax.toFixed(0)}/person)`
+                }
+                return `${restaurant.price_range} × ${groupSize} people`
+              })()}
+            </p>
           </div>
         )}
       </div>

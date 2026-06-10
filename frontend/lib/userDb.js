@@ -77,19 +77,6 @@ export async function fetchUserSessionData(userId, sessionId) {
   return data.session_data
 }
 
-export async function deleteUserSession(userId, sessionId) {
-  const supabase = createSupabaseClient()
-  if (!supabase) return { error: 'Supabase not configured' }
-
-  const { error } = await supabase
-    .from('user_sessions')
-    .delete()
-    .eq('user_id', userId)
-    .eq('session_id', sessionId)
-
-  return { error: error?.message || null }
-}
-
 export async function countUserSessionsToday(userId) {
   const supabase = createSupabaseClient()
   if (!supabase) return 0
