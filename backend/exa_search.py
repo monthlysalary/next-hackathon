@@ -162,6 +162,8 @@ def search_restaurants(area: str, dietary: list[str], meal_type: str = "") -> li
     meal_hint = ""
     if meal_type in ("supper",):
         meal_hint = "supper late night 24 hours"
+    elif meal_type in ("breakfast",):
+        meal_hint = "breakfast brunch kaya toast prata dim sum cafe morning"
     elif meal_type in ("snack", "any"):
         meal_hint = "cafe snack dessert"
     elif meal_type in ("lunch",):

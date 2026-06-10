@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -19,10 +19,35 @@ def _get_token() -> str | None:
     return token
 
 
+def _parse_day(day: str) -> date:
+    """Parse YYYY-MM-DD or legacy today/tomorrow/weekend."""
+    now = datetime.now(SGT).date()
+    day_key = (day or "today").strip().lower()
+
+    if day_key == "today":
+        return now
+    if day_key == "tomorrow":
+        return now + timedelta(days=1)
+    if day_key == "weekend":
+        days_until_sat = (5 - now.weekday()) % 7
+        if days_until_sat == 0 and datetime.now(SGT).hour >= 19:
+            days_until_sat = 7
+        return now + timedelta(days=days_until_sat)
+
+    raw = (day or "").strip()[:10]
+    try:
+        if len(raw) == 10 and raw[4] == "-":
+            return datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        pass
+    return now
+
+
 def _departure_datetime(meal_type: str, day: str) -> datetime:
     now = datetime.now(SGT)
     meal = (meal_type or "dinner").lower()
     hour = {
+        "breakfast": 8,
         "lunch": 12,
         "dinner": 19,
         "supper": 22,
@@ -31,15 +56,7 @@ def _departure_datetime(meal_type: str, day: str) -> datetime:
         "any": now.hour,
     }.get(meal, 19)
 
-    target_date = now.date()
-    day_key = (day or "today").lower()
-    if day_key == "tomorrow":
-        target_date += timedelta(days=1)
-    elif day_key == "weekend":
-        days_until_sat = (5 - now.weekday()) % 7
-        if days_until_sat == 0 and now.hour >= hour:
-            days_until_sat = 7
-        target_date += timedelta(days=days_until_sat)
+    target_date = _parse_day(day)
 
     return datetime(
         target_date.year,

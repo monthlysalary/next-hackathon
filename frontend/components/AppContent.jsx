@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import GroupSetup from './GroupSetup'
 import ResultsPanel from './ResultsPanel'
 import AuthModal from './AuthModal'
@@ -10,6 +10,8 @@ import {
   EMPTY_PERSON,
   DEMO_PERSONS,
   DEMO_RESULT,
+  todayDateString,
+  normalizeDay,
 } from '@/lib/constants'
 import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro } from '@/lib/userDb'
 import {
@@ -19,6 +21,18 @@ import {
   getAnonymousDailySearchCount,
   incrementAnonymousDailySearchCount,
 } from '@/lib/planLimits'
+import {
+  buildJoinUrl,
+  createGroup,
+  fetchGroup,
+  updateGroup,
+  joinGroup,
+  isGroupSearchComplete,
+  normalizePersonsFromApi,
+  pickJoinSlotIndex,
+  getJoinSlotKey,
+  getHostKey,
+} from '@/lib/groupSession'
 
 const SESSION_KEY = 'tablefor_session_id'
 const VOTER_KEY = 'tablefor_voter_name'
@@ -38,11 +52,26 @@ const DIETARY_MAP = {
 }
 
 const MUST_HAVE_MAP = {
-  Aircon: 'aircon',
-  'Big tables': 'big tables',
   Quiet: 'quiet',
-  'Halal-cert': 'halal-certified',
+  Aircon: 'aircon',
+  'Air-conditioned': 'aircon',
+  'Big tables': 'big tables',
+  'Large group seating': 'big tables',
   Parking: 'parking',
+  'Halal-cert': 'halal-certified',
+}
+
+function mergePersonsFromServer(local, remote, preserveIndex) {
+  const normalized = normalizePersonsFromApi(remote)
+  if (preserveIndex == null) return normalized
+  const merged = [...normalized]
+  while (merged.length <= preserveIndex) {
+    merged.push({ ...EMPTY_PERSON })
+  }
+  if (local[preserveIndex]) {
+    merged[preserveIndex] = local[preserveIndex]
+  }
+  return merged
 }
 
 export default function AppContent() {
@@ -50,7 +79,7 @@ export default function AppContent() {
   const [view, setView] = useState('setup')
   const [groupName, setGroupName] = useState('Our Group')
   const [mealType, setMealType] = useState('dinner')
-  const [day, setDay] = useState('today')
+  const [day, setDay] = useState(todayDateString())
   const [persons, setPersons] = useState([
     { ...EMPTY_PERSON },
     { ...EMPTY_PERSON },
@@ -67,8 +96,28 @@ export default function AppContent() {
   const [voterName, setVoterName] = useState('')
   const [votes, setVotes] = useState({})
   const [voters, setVoters] = useState([])
+  const [groupSessionId, setGroupSessionId] = useState(null)
+  const [joinMode, setJoinMode] = useState(false)
+  const [isHost, setIsHost] = useState(true)
+  const [joinSlotIndex, setJoinSlotIndex] = useState(null)
+  const [inviteCopied, setInviteCopied] = useState(false)
+  const groupCreatedRef = useRef(false)
 
-  const applySessionPayload = (data) => {
+  const applyGroupData = useCallback((data) => {
+    if (data.persons) setPersons(normalizePersonsFromApi(data.persons))
+    if (data.group_name) setGroupName(data.group_name)
+    if (data.meal_type) setMealType(data.meal_type)
+    if (data.day) setDay(normalizeDay(data.day))
+    const sid = data.session_id
+    if (sid) {
+      setGroupSessionId(sid)
+      localStorage.setItem(SESSION_KEY, sid)
+      setHasSavedSession(true)
+    }
+  }, [])
+
+  const applySearchResults = useCallback((data) => {
+    applyGroupData(data)
     setResult({
       session_id: data.session_id,
       suggested_area: data.suggested_area,
@@ -77,47 +126,67 @@ export default function AppContent() {
       restaurants: data.restaurants,
       warning: data.warning,
     })
-    if (data.persons) setPersons(data.persons)
-    if (data.group_name) setGroupName(data.group_name)
-    if (data.meal_type) setMealType(data.meal_type)
-    if (data.day) setDay(data.day)
     setSavedRestaurants(
       (data.saved_restaurants || []).map((r) => r.name || r),
     )
     setVotes(data.votes || {})
     setVoters(data.voters || [])
-    localStorage.setItem(SESSION_KEY, data.session_id)
-    setHasSavedSession(true)
     setView('results')
-  }
+  }, [applyGroupData])
 
-  const loadSession = async (sessionId) => {
+  const loadSession = async (sessionId, { join = false } = {}) => {
     setLoadingSessionId(sessionId)
     setError(null)
     try {
-      const res = await fetch(`${API_URL}/session/${sessionId}`)
+      let data = null
+      const res = await fetch(`${API_URL}/group/${sessionId}`)
       if (res.ok) {
-        applySessionPayload(await res.json())
-        return
-      }
-
-      if (user) {
-        const cached = await fetchUserSessionData(user.id, sessionId)
-        if (cached) {
-          applySessionPayload(cached)
-          return
+        data = await res.json()
+      } else {
+        const sessionRes = await fetch(`${API_URL}/session/${sessionId}`)
+        if (sessionRes.ok) {
+          data = await sessionRes.json()
         }
       }
 
-      const cachedLocal = userSessions.find((s) => s.session_id === sessionId)
-      if (cachedLocal?.session_data) {
-        applySessionPayload(cachedLocal.session_data)
+      if (!data && user) {
+        data = await fetchUserSessionData(user.id, sessionId)
+      }
+      if (!data) {
+        const cachedLocal = userSessions.find((s) => s.session_id === sessionId)
+        data = cachedLocal?.session_data
+      }
+      if (!data) {
+        throw new Error('Group not found or expired. Ask the host for a new link.')
+      }
+
+      if (isGroupSearchComplete(data)) {
+        applySearchResults(data)
         return
       }
 
-      throw new Error('Session expired or not found. Run a new search to save fresh results.')
+      applyGroupData(data)
+      setView('setup')
+
+      if (join) {
+        setJoinMode(true)
+        setIsHost(false)
+        const slot = pickJoinSlotIndex(data.persons, sessionId)
+        let normalized = normalizePersonsFromApi(data.persons)
+        while (normalized.length <= slot) {
+          normalized.push({ ...EMPTY_PERSON })
+        }
+        setPersons(normalized)
+        setJoinSlotIndex(slot)
+        localStorage.setItem(getJoinSlotKey(sessionId), String(slot))
+        window.history.replaceState({}, '', `?join=${sessionId}`)
+      } else {
+        const isGroupHost = localStorage.getItem(getHostKey(sessionId)) === 'true'
+        setJoinMode(false)
+        setIsHost(isGroupHost || !join)
+      }
     } catch (e) {
-      setError(e.message || 'Could not load session')
+      setError(e.message || 'Could not load group')
     } finally {
       setLoadingSessionId(null)
     }
@@ -174,12 +243,18 @@ export default function AppContent() {
     if (savedVoter) setVoterName(savedVoter)
 
     const params = new URLSearchParams(window.location.search)
-    const sessionId =
-      params.get('session') || localStorage.getItem(SESSION_KEY)
-    if (sessionId) {
+    const joinId = params.get('join')
+    const sessionId = params.get('session') || localStorage.getItem(SESSION_KEY)
+
+    if (joinId) {
+      loadSession(joinId, { join: true })
+    } else if (sessionId) {
       setHasSavedSession(true)
       if (params.get('session')) {
         loadSession(sessionId)
+      } else if (localStorage.getItem(getHostKey(sessionId)) === 'true') {
+        setGroupSessionId(sessionId)
+        setIsHost(true)
       }
     }
   }, [])
@@ -209,13 +284,85 @@ export default function AppContent() {
     }
   }, [user, profile?.is_pro])
 
-  // Poll votes every 5 seconds when on results view
-  // Poll votes every 15 seconds when on results view and session is shared
+  // Host: create shareable group session once
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('join')) return
+    if (joinMode || groupSessionId || view !== 'setup' || groupCreatedRef.current) return
+
+    groupCreatedRef.current = true
+    ;(async () => {
+      try {
+        const data = await createGroup({
+          group_name: groupName,
+          meal_type: mealType,
+          day,
+          persons,
+        })
+        setGroupSessionId(data.session_id)
+        localStorage.setItem(getHostKey(data.session_id), 'true')
+        setIsHost(true)
+      } catch {
+        groupCreatedRef.current = false
+      }
+    })()
+  }, [joinMode, groupSessionId, view, groupName, mealType, day, persons])
+
+  // Host: sync setup to backend
+  useEffect(() => {
+    if (!groupSessionId || !isHost || view !== 'setup' || joinMode) return
+
+    const timer = setTimeout(async () => {
+      try {
+        await updateGroup(groupSessionId, {
+          group_name: groupName,
+          meal_type: mealType,
+          day,
+          persons,
+        })
+      } catch {
+        /* ignore sync errors */
+      }
+    }, 800)
+
+    return () => clearTimeout(timer)
+  }, [groupSessionId, isHost, joinMode, view, groupName, mealType, day, persons])
+
+  // Poll group for joiners (setup) or redirect when search completes
+  useEffect(() => {
+    if (!groupSessionId || view !== 'setup') return
+
+    const poll = async () => {
+      try {
+        const data = await fetchGroup(groupSessionId)
+        if (isGroupSearchComplete(data)) {
+          applySearchResults(data)
+          return
+        }
+        setPersons((prev) =>
+          mergePersonsFromServer(
+            prev,
+            data.persons,
+            joinMode ? joinSlotIndex : null,
+          ),
+        )
+        if (data.group_name) setGroupName(data.group_name)
+        if (data.meal_type) setMealType(data.meal_type)
+        if (data.day) setDay(normalizeDay(data.day))
+      } catch {
+        /* ignore */
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, 5000)
+    return () => clearInterval(interval)
+  }, [groupSessionId, view, joinMode, joinSlotIndex, applySearchResults])
+
   useEffect(() => {
     if (view !== 'results' || !result?.session_id) return
     if (result.session_id === 'demo-session') return
 
-    // Only start polling if the session was loaded via a share link
     const params = new URLSearchParams(window.location.search)
     const isSharedSession = params.get('session') === result.session_id
 
@@ -232,7 +379,6 @@ export default function AppContent() {
       }
     }
 
-    // Fetch once immediately, then poll only if shared
     poll()
     if (!isSharedSession) return
     const interval = setInterval(poll, 15000)
@@ -248,6 +394,7 @@ export default function AppContent() {
       travel_summary: data.travel_summary,
       restaurants: data.restaurants,
       warning: data.warning,
+      status: 'searched',
       group_name: groupName,
       meal_type: mealType,
       day,
@@ -264,6 +411,30 @@ export default function AppContent() {
     })
     const sessions = await fetchUserSessions(user.id)
     setUserSessions(sessions)
+  }
+
+  const handleCopyInvite = async () => {
+    if (!groupSessionId) return
+    const url = buildJoinUrl(groupSessionId)
+    try {
+      await navigator.clipboard.writeText(url)
+      setInviteCopied(true)
+      setTimeout(() => setInviteCopied(false), 2000)
+    } catch {
+      setError(`Copy this link: ${url}`)
+    }
+  }
+
+  const handleGuestPersonComplete = async (finalPerson, personIndex) => {
+    if (!groupSessionId) return
+    try {
+      const data = await joinGroup(groupSessionId, finalPerson, personIndex)
+      setPersons(normalizePersonsFromApi(data.persons))
+      setJoinSlotIndex(data.person_index)
+      localStorage.setItem(getJoinSlotKey(groupSessionId), String(data.person_index))
+    } catch (e) {
+      setError(e.message || 'Could not save your preferences')
+    }
   }
 
   const handleFind = async () => {
@@ -289,15 +460,25 @@ export default function AppContent() {
       const personsPayload = persons.map((p) => ({
         ...p,
         dietary: p.dietary.map((d) => DIETARY_MAP[d] || d.toLowerCase()),
-        cuisine_loves: p.cuisine_loves,
+        cuisine_loves: p.cuisine_loves.map((c) => c.toLowerCase()),
         must_have: p.must_have.map((m) => MUST_HAVE_MAP[m] || m.toLowerCase()),
         avoid: (p.avoid || []).map((a) => a.toLowerCase()),
       }))
+
+      if (groupSessionId && isHost) {
+        await updateGroup(groupSessionId, {
+          group_name: groupName,
+          meal_type: mealType,
+          day,
+          persons,
+        })
+      }
 
       const res = await fetch(`${API_URL}/find`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          session_id: groupSessionId,
           group_name: groupName,
           persons: personsPayload,
           meal_type: mealType,
@@ -315,6 +496,7 @@ export default function AppContent() {
         setError(data.warning)
       }
       localStorage.setItem(SESSION_KEY, data.session_id)
+      setGroupSessionId(data.session_id)
       setHasSavedSession(true)
       setSavedRestaurants([])
       if (!user) {
@@ -362,7 +544,6 @@ export default function AppContent() {
   const handleVote = async (restaurantName) => {
     if (!result?.session_id || !voterName.trim()) return
 
-    // Optimistic update
     const newVotes = { ...votes }
     for (const key of Object.keys(newVotes)) {
       newVotes[key] = (newVotes[key] || []).filter((v) => v !== voterName)
@@ -377,7 +558,6 @@ export default function AppContent() {
 
     localStorage.setItem(VOTER_KEY, voterName)
 
-    // For demo mode, just keep it local
     if (result.session_id === 'demo-session') return
 
     try {
@@ -404,7 +584,7 @@ export default function AppContent() {
     setPersons(DEMO_PERSONS.map((p) => ({ ...p })))
     setGroupName('Demo Group')
     setMealType('dinner')
-    setDay('today')
+    setDay(todayDateString())
     setResult(DEMO_RESULT)
     setSavedRestaurants([])
     setVotes({})
@@ -416,6 +596,10 @@ export default function AppContent() {
     setView('setup')
     setResult(null)
     setError(null)
+    setJoinMode(false)
+    setIsHost(true)
+    setJoinSlotIndex(null)
+    groupCreatedRef.current = false
   }
 
   const handleContinueSession = () => {
@@ -484,7 +668,6 @@ export default function AppContent() {
 
   return (
     <div className="min-h-full bg-bg">
-      {/* App header */}
       <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-border px-4 py-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -498,14 +681,21 @@ export default function AppContent() {
           <div className="flex items-center gap-2">
             {authConfigured && (
               user ? (
-                <button
-                  type="button"
-                  onClick={signOut}
-                  className="px-2.5 py-1 text-[10px] font-medium border border-border rounded-full text-text-secondary hover:text-text-primary transition-colors"
-                  title={profile?.email || user.email}
-                >
-                  {profile?.display_name || 'Account'}
-                </button>
+                <>
+                  <span
+                    className="text-[10px] text-text-secondary truncate max-w-[88px]"
+                    title={profile?.email || user.email}
+                  >
+                    {profile?.display_name || user.email?.split('@')[0] || 'Account'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={signOut}
+                    className="px-2.5 py-1 text-[10px] font-medium border border-border rounded-full text-text-secondary hover:text-red-600 hover:border-red-200 transition-colors"
+                  >
+                    Sign out
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"
@@ -577,6 +767,13 @@ export default function AppContent() {
           isPro={isPro}
           onUpgrade={handleUpgrade}
           maxPersons={isPro ? PRO_MAX_PERSONS : FREE_MAX_PERSONS}
+          groupSessionId={groupSessionId}
+          joinMode={joinMode}
+          isHost={isHost}
+          joinSlotIndex={joinSlotIndex}
+          onCopyInvite={handleCopyInvite}
+          inviteCopied={inviteCopied}
+          onGuestPersonComplete={handleGuestPersonComplete}
         />
       ) : (
         <ResultsPanel

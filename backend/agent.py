@@ -50,6 +50,7 @@ def _build_prompt(
             "cuisine_loves": p.cuisine_loves,
             "must_have": p.must_have,
             "avoid": p.avoid,
+            "notes": p.notes,
         }
         for p in request.persons
     ]
@@ -67,6 +68,8 @@ MEAL TYPE: {request.meal_type}
 DAY: {request.day}
 
 IMPORTANT — MEAL TYPE CONTEXT:
+- If meal type is "breakfast": recommend breakfast/brunch spots, kaya toast,
+  prata, dim sum, cafés open in the morning.
 - If meal type is "lunch" or "dinner": recommend proper sit-down restaurants
   with full meals (rice, mains, sides).
 - If meal type is "dessert": recommend dessert cafés, bakeries, ice cream,
@@ -88,6 +91,7 @@ YOUR TASKS:
    satisfying ALL constraints simultaneously:
    - Every person's dietary requirements (non-negotiable)
    - Budget ceiling = the LOWEST budget in the group
+     (< S$5 = hawker/coffee shop, < S$10 = casual, S$10–20 = mid-range, etc.)
    - Must-have amenities
    - Best cuisine overlap across the group
 
@@ -164,6 +168,8 @@ MEAL TYPE: {session_data.get('meal_type', 'dinner')}
 DAY: {session_data.get('day', 'today')}
 
 IMPORTANT — MEAL TYPE CONTEXT:
+- If meal type is "breakfast": recommend breakfast/brunch spots, kaya toast,
+  prata, dim sum, cafés open in the morning.
 - If meal type is "lunch" or "dinner": recommend proper sit-down restaurants
   with full meals (rice, mains, sides).
 - If meal type is "dessert": recommend dessert cafés, bakeries, ice cream,
@@ -375,6 +381,53 @@ def _fallback_response(
     }
 
 
+def _align_meetup_to_top_pick(parsed: dict) -> None:
+    """Set meetup MRT near the #1 restaurant when it differs from the group midpoint."""
+    restaurants = parsed.get("restaurants") or []
+    if not restaurants:
+        return
+
+    top = restaurants[0]
+    lat = top.get("latitude")
+    lng = top.get("longitude")
+
+    if lat is None or lng is None:
+        query = " ".join(
+            p
+            for p in [top.get("name"), top.get("area"), "Singapore"]
+            if p
+        )
+        coords = location.geocode_area(query)
+        lat, lng = coords["latitude"], coords["longitude"]
+        top["latitude"] = lat
+        top["longitude"] = lng
+
+    restaurant_mrt = location.get_nearest_area(lat, lng)
+    current_area = (parsed.get("suggested_area") or "").strip().lower()
+
+    current_coords = location.geocode_area(parsed.get("suggested_area") or restaurant_mrt)
+    station = location.MRT_STATIONS.get(restaurant_mrt.lower())
+    if station:
+        r_lat, r_lng = station[0], station[1]
+    else:
+        r_lat, r_lng = lat, lng
+
+    dist_km = location._haversine_km(
+        current_coords["latitude"],
+        current_coords["longitude"],
+        r_lat,
+        r_lng,
+    )
+
+    if restaurant_mrt.lower() != current_area or dist_km > 0.5:
+        parsed["suggested_area"] = restaurant_mrt
+        name = top.get("name", "our top pick")
+        parsed["area_reason"] = (
+            f"Meet at {restaurant_mrt} MRT — the station nearest to {name}, "
+            f"our top recommendation."
+        )
+
+
 def _build_restaurants(parsed: dict, midpoint_area: str) -> list[RestaurantResult]:
     return [
         RestaurantResult(
@@ -487,6 +540,8 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
         if not warning:
             warning = "AI returned no results — showing generic suggestions."
 
+    _align_meetup_to_top_pick(parsed)
+
     travel.apply_travel_summary(
         parsed,
         request.persons,
@@ -510,6 +565,7 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
     dynamo.save_session(
         session_id,
         {
+            "status": "searched",
             "group_name": request.group_name,
             "meal_type": request.meal_type,
             "day": request.day,
@@ -590,6 +646,8 @@ async def refine_results(refine_request: RefineRequest) -> AgentResponse:
         parsed = _fallback_response(session, midpoint_area)
         if not warning:
             warning = "AI returned no results — showing generic suggestions."
+
+    _align_meetup_to_top_pick(parsed)
 
     travel.apply_travel_summary(
         parsed,

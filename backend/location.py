@@ -503,14 +503,133 @@ def calculate_midpoint(locations: list[dict]) -> dict:
 
 def get_nearest_area(lat: float, lng: float) -> str:
     """Find the nearest named MRT station/area to given coordinates."""
-    best_area = "orchard"
-    best_dist = float("inf")
+    nearest = get_nearest_areas(lat, lng, limit=1)
+    if nearest:
+        return nearest[0][0].title()
+    return "Orchard"
+
+
+def get_nearest_areas(lat: float, lng: float, limit: int = 5) -> list[tuple[str, float]]:
+    """Return nearest MRT stations ranked by distance (km)."""
+    ranked: list[tuple[str, float]] = []
     for area, (area_lat, area_lng, lines, _) in MRT_STATIONS.items():
-        # Prefer stations with MRT lines
+        if not lines:
+            continue
         dist = _haversine_km(lat, lng, area_lat, area_lng)
-        if lines:
-            dist *= 0.8  # 20% bonus for MRT stations
-        if dist < best_dist:
-            best_dist = dist
-            best_area = area
-    return best_area.title()
+        ranked.append((area, dist))
+    ranked.sort(key=lambda item: item[1])
+    return ranked[:limit]
+
+
+def _is_in_singapore(lat: float, lng: float) -> bool:
+    return 1.15 <= lat <= 1.48 and 103.55 <= lng <= 104.10
+
+
+def _reverse_geocode_mapbox(lat: float, lng: float) -> list[str]:
+    token = os.getenv("MAPBOX_TOKEN", "")
+    if not token:
+        return []
+
+    url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{lng},{lat}.json"
+    try:
+        with httpx.Client(timeout=10.0, verify=False) as client:
+            response = client.get(
+                url,
+                params={
+                    "access_token": token,
+                    "country": "SG",
+                    "limit": "8",
+                    "types": "poi,neighborhood,locality,place,district,address",
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+    except Exception:
+        return []
+
+    candidates: list[str] = []
+    for feature in data.get("features", []):
+        text = feature.get("text")
+        if text:
+            candidates.append(text)
+        place_name = feature.get("place_name", "")
+        if place_name:
+            candidates.append(place_name.split(",")[0])
+        for ctx in feature.get("context", []):
+            ctx_text = ctx.get("text")
+            if ctx_text:
+                candidates.append(ctx_text)
+    return candidates
+
+
+def _match_mapbox_candidates(candidates: list[str]) -> str | None:
+    for name in candidates:
+        cleaned = name.strip()
+        if not cleaned:
+            continue
+
+        matched, _ = fuzzy_match_area(cleaned)
+        if matched:
+            return matched
+
+        lower = cleaned.lower()
+        for suffix in (" mrt", " station", " mrt station"):
+            if lower.endswith(suffix):
+                matched, _ = fuzzy_match_area(cleaned[: -len(suffix)])
+                if matched:
+                    return matched
+    return None
+
+
+def resolve_gps_area(lat: float, lng: float) -> dict:
+    """
+    Resolve coordinates to a Singapore MRT/area name.
+    Uses Mapbox reverse geocode first, then nearest MRT stations.
+    """
+    in_sg = _is_in_singapore(lat, lng)
+    nearest = get_nearest_areas(lat, lng, limit=5)
+    mapbox_match = _match_mapbox_candidates(_reverse_geocode_mapbox(lat, lng))
+
+    area_key: str | None = None
+    source = "mrt_nearest"
+
+    if mapbox_match:
+        area_key = mapbox_match
+        source = "mapbox"
+    elif nearest and in_sg:
+        best_name, best_dist = nearest[0]
+        if best_dist <= 4.0:
+            area_key = best_name
+            source = "mrt_nearest"
+
+    if not area_key and nearest:
+        area_key = nearest[0][0]
+
+    if not area_key:
+        area_key = "orchard"
+
+    primary = area_key.title()
+    alternatives: list[str] = []
+    for name, _dist in nearest:
+        title = name.title()
+        if title != primary and title not in alternatives:
+            alternatives.append(title)
+        if len(alternatives) >= 4:
+            break
+
+    result = {
+        "area": primary,
+        "alternatives": alternatives,
+        "source": source,
+        "in_singapore": in_sg,
+    }
+    if not in_sg:
+        result["message"] = (
+            "Network location looks inaccurate. Pick the closest area below."
+        )
+    return result
+
+
+def list_searchable_areas() -> list[str]:
+    """Sorted display names for location autocomplete (MRT + common areas)."""
+    return sorted({name.title() for name in MRT_STATIONS}, key=str.lower)

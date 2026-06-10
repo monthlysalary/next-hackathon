@@ -11,6 +11,7 @@ class PersonProfile(BaseModel):
     cuisine_loves: list[str]
     must_have: list[str]
     avoid: list[str]
+    notes: str = ""
 
 
 class GroupRequest(BaseModel):
@@ -20,6 +21,20 @@ class GroupRequest(BaseModel):
     meal_type: str
     day: str
     is_pro: bool = False
+
+
+class GroupSetupPayload(BaseModel):
+    session_id: str | None = None
+    group_name: str = "Our Group"
+    meal_type: str = "dinner"
+    day: str
+    persons: list[PersonProfile]
+    is_pro: bool = False
+
+
+class JoinPersonRequest(BaseModel):
+    person: PersonProfile
+    person_index: int | None = None
 
 
 class RefineRequest(BaseModel):

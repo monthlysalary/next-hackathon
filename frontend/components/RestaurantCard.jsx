@@ -225,13 +225,6 @@ export default function RestaurantCard({
           )}
           <button
             type="button"
-            onClick={handleViewMenu}
-            className="flex-1 py-2.5 rounded-[14px] text-[12px] font-medium transition-colors border border-purple-200 text-purple-700 hover:bg-purple-50"
-          >
-            {menuLoading ? '...' : 'Menu'}
-          </button>
-          <button
-            type="button"
             onClick={handleSave}
             disabled={isSaved || saving}
             className={`flex-1 py-2.5 rounded-[14px] text-[12px] font-medium transition-colors ${
