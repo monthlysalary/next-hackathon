@@ -3,32 +3,95 @@
 import { useState } from 'react'
 import { API_URL } from '@/lib/constants'
 
-// Curated Unsplash food images by cuisine type (direct CDN links, no API key needed)
-const CUISINE_IMAGES = {
-  chinese: 'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=400&h=200&fit=crop&q=80',
-  malay: 'https://images.unsplash.com/photo-1562565652-a0d8f0c59eb4?w=400&h=200&fit=crop&q=80',
-  indian: 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&h=200&fit=crop&q=80',
-  western: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&h=200&fit=crop&q=80',
-  japanese: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&h=200&fit=crop&q=80',
-  korean: 'https://images.unsplash.com/photo-1590301157890-4810ed352733?w=400&h=200&fit=crop&q=80',
-  thai: 'https://images.unsplash.com/photo-1562565652-a0d8f0c59eb4?w=400&h=200&fit=crop&q=80',
-  hawker: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=200&fit=crop&q=80',
-  vegetarian: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=200&fit=crop&q=80',
-  seafood: 'https://images.unsplash.com/photo-1615141982883-c7ad0e69fd62?w=400&h=200&fit=crop&q=80',
-  default: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=200&fit=crop&q=80',
+// Large pool of curated Unsplash food images by cuisine type
+// Multiple images per cuisine to avoid repeats within a set of 3 results
+const CUISINE_IMAGE_POOL = {
+  chinese: [
+    'https://images.unsplash.com/photo-1563245372-f21724e3856d?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1585032226651-759b368d7246?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1552566626-52f8b828add9?w=400&h=200&fit=crop&q=80',
+  ],
+  malay: [
+    'https://images.unsplash.com/photo-1562565652-a0d8f0c59eb4?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1476224203421-9ac39bcb3327?w=400&h=200&fit=crop&q=80',
+  ],
+  indian: [
+    'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1596797038530-2c107229654b?w=400&h=200&fit=crop&q=80',
+  ],
+  western: [
+    'https://images.unsplash.com/photo-1544025162-d76694265947?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1432139555190-58524dae6a55?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1550547660-d9450f859349?w=400&h=200&fit=crop&q=80',
+  ],
+  japanese: [
+    'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1553621042-f6e147245754?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1617196034796-73dfa7b1fd56?w=400&h=200&fit=crop&q=80',
+  ],
+  korean: [
+    'https://images.unsplash.com/photo-1590301157890-4810ed352733?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1498654896293-37aacf113fd9?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1583224994076-1b2e5980c014?w=400&h=200&fit=crop&q=80',
+  ],
+  thai: [
+    'https://images.unsplash.com/photo-1559314809-0d155014e29e?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1562565652-a0d8f0c59eb4?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=400&h=200&fit=crop&q=80',
+  ],
+  hawker: [
+    'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400&h=200&fit=crop&q=80',
+  ],
+  vegetarian: [
+    'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1540914124281-342587941389?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1543362906-acfc16c67564?w=400&h=200&fit=crop&q=80',
+  ],
+  seafood: [
+    'https://images.unsplash.com/photo-1615141982883-c7ad0e69fd62?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1559737558-2f5a35f4523b?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1448043552756-e747b7a2b2b8?w=400&h=200&fit=crop&q=80',
+  ],
+  cafe: [
+    'https://images.unsplash.com/photo-1554118811-1e0d58224f24?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=400&h=200&fit=crop&q=80',
+  ],
+  default: [
+    'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=400&h=200&fit=crop&q=80',
+    'https://images.unsplash.com/photo-1424847651672-bf20a4b0982b?w=400&h=200&fit=crop&q=80',
+  ],
 }
 
-function getCuisineImage(cuisine) {
-  if (!cuisine) return CUISINE_IMAGES.default
-  const lower = cuisine.toLowerCase()
-  for (const [key, url] of Object.entries(CUISINE_IMAGES)) {
-    if (lower.includes(key)) return url
+/**
+ * Get a cuisine image for a restaurant at a given rank (0-indexed).
+ * Guarantees no two restaurants in the same set of 3 get the same image.
+ */
+function getCuisineImage(cuisine, rank = 0) {
+  const lower = (cuisine || '').toLowerCase()
+  let pool = CUISINE_IMAGE_POOL.default
+
+  for (const [key, images] of Object.entries(CUISINE_IMAGE_POOL)) {
+    if (lower.includes(key)) {
+      pool = images
+      break
+    }
   }
-  // Check for nasi padang / malay variants
-  if (lower.includes('nasi') || lower.includes('padang')) return CUISINE_IMAGES.malay
-  if (lower.includes('south indian') || lower.includes('north indian')) return CUISINE_IMAGES.indian
-  if (lower.includes('mixed') || lower.includes('food centre')) return CUISINE_IMAGES.hawker
-  return CUISINE_IMAGES.default
+
+  // Extra cuisine checks
+  if (lower.includes('nasi') || lower.includes('padang')) pool = CUISINE_IMAGE_POOL.malay
+  else if (lower.includes('south indian') || lower.includes('north indian')) pool = CUISINE_IMAGE_POOL.indian
+  else if (lower.includes('mixed') || lower.includes('food centre')) pool = CUISINE_IMAGE_POOL.hawker
+  else if (lower.includes('cafe') || lower.includes('coffee') || lower.includes('brunch')) pool = CUISINE_IMAGE_POOL.cafe
+  else if (lower.includes('bar') || lower.includes('pub')) pool = CUISINE_IMAGE_POOL.cafe
+
+  // Use rank to pick a different image from the pool (no repeats for ranks 0,1,2)
+  return pool[rank % pool.length]
 }
 
 const DIETARY_KEYWORDS = [
@@ -83,11 +146,15 @@ export default function RestaurantCard({
   const [saving, setSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(saved)
   const [imgError, setImgError] = useState(false)
+  const [menuLoading, setMenuLoading] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuData, setMenuData] = useState(null)
 
   // Determine best image: use photo_url if provided, otherwise cuisine-based Unsplash image
+  // rank is 0-indexed so each of the 3 restaurants gets a unique image
   const imageUrl = (restaurant.photo_url && !imgError)
     ? restaurant.photo_url
-    : getCuisineImage(restaurant.cuisine)
+    : getCuisineImage(restaurant.cuisine, rank - 1)
 
   const handleSave = async () => {
     if (isSaved || saving) return
@@ -101,6 +168,25 @@ export default function RestaurantCard({
       onSaved?.(restaurant.name)
     } catch { /* ignore */ } finally {
       setSaving(false)
+    }
+  }
+
+  const handleViewMenu = async () => {
+    if (menuOpen) { setMenuOpen(false); return }
+    if (menuData) {
+      if (menuData.menu_items?.length > 0) setMenuOpen(true)
+      return
+    }
+    setMenuLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/menu/${encodeURIComponent(restaurant.name)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setMenuData(data)
+        if (data.menu_items?.length > 0) setMenuOpen(true)
+      }
+    } catch { /* ignore */ } finally {
+      setMenuLoading(false)
     }
   }
 
@@ -218,11 +304,18 @@ export default function RestaurantCard({
               href={restaurant.reservation_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 text-center py-2.5 rounded-[14px] border border-green-200 text-[12px] font-medium text-green-700 hover:bg-green-50 transition-colors"
+              className="flex-1 text-center py-2.5 rounded-[14px] border border-accent/30 bg-accent-light text-[12px] font-medium text-accent hover:bg-accent/10 transition-colors"
             >
-              🪑 Reserve
+              Reserve
             </a>
           )}
+          <button
+            type="button"
+            onClick={handleViewMenu}
+            className="flex-1 py-2.5 rounded-[14px] text-[12px] font-medium transition-colors border border-border text-text-secondary hover:text-accent hover:border-accent"
+          >
+            {menuLoading ? '...' : 'Menu'}
+          </button>
           <button
             type="button"
             onClick={handleSave}
@@ -236,6 +329,39 @@ export default function RestaurantCard({
             {isSaved ? 'Saved ✓' : saving ? '...' : 'Save'}
           </button>
         </div>
+
+        {/* Menu panel */}
+        {menuOpen && menuData && menuData.menu_items?.length > 0 && (
+          <div className="mt-3 bg-surface-raised border border-border rounded-[14px] p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-[11px] font-semibold text-text-secondary uppercase tracking-wider">
+                Menu
+              </h4>
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                className="text-[10px] text-text-secondary hover:text-text-primary"
+              >
+                ✕
+              </button>
+            </div>
+            <ul className="space-y-1">
+              {menuData.menu_items.slice(0, 10).map((item, i) => (
+                <li key={i} className="text-[11px] text-text-primary">{item}</li>
+              ))}
+            </ul>
+            {menuData.source_url && (
+              <a
+                href={menuData.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block text-[10px] text-accent hover:underline"
+              >
+                View full menu →
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -93,7 +93,13 @@ YOUR TASKS:
    - Budget ceiling = the LOWEST budget in the group
      (< S$5 = hawker/coffee shop, < S$10 = casual, S$10–20 = mid-range, etc.)
    - Must-have amenities
-   - Best cuisine overlap across the group
+   - CUISINE PREFERENCES ARE CRITICAL: Only recommend restaurants whose
+     primary cuisine matches what the group wants. If the group chose
+     "Chinese" and "Malay", do NOT recommend Japanese/Korean/Western.
+     If "Any" is selected, you have freedom.
+   - MEAL TYPE IS CRITICAL: A "breakfast" search must return breakfast spots,
+     NOT dinner restaurants. A "drinks" search must return bars/cafes, NOT
+     full restaurants. Match the venue type to the meal.
 
 3. For each restaurant extract or infer these tags.
    Use "unknown" if not clearly mentioned:
@@ -509,7 +515,16 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
             if d.lower() != "none" and d not in combined_dietary:
                 combined_dietary.append(d)
 
-    exa_results = exa_search.search_restaurants(midpoint_area, combined_dietary, request.meal_type)
+    # Collect cuisine preferences for better search
+    combined_cuisines: list[str] = []
+    for person in request.persons:
+        for c in person.cuisine_loves:
+            if c.lower() != "any" and c not in combined_cuisines:
+                combined_cuisines.append(c)
+
+    exa_results = exa_search.search_restaurants(
+        midpoint_area, combined_dietary, request.meal_type, combined_cuisines
+    )
 
     prompt = _build_prompt(request, midpoint_area, exa_results)
 
@@ -583,8 +598,19 @@ async def run_agent(request: GroupRequest) -> AgentResponse:
 async def refine_results(refine_request: RefineRequest) -> AgentResponse:
     """Re-run the agent with user's adjustment message."""
     session = dynamo.get_session(refine_request.session_id)
+
+    # If session not found in backend, build it from request context
     if not session:
-        raise ValueError("Session not found")
+        if refine_request.persons:
+            session = {
+                "persons": [p.model_dump() for p in refine_request.persons],
+                "meal_type": refine_request.meal_type or "dinner",
+                "day": refine_request.day or "today",
+                "suggested_area": refine_request.suggested_area or "Bishan",
+                "group_name": refine_request.group_name or "Our Group",
+            }
+        else:
+            raise ValueError("Session not found and no context provided")
 
     # Get the midpoint area from session
     midpoint_area = session.get("suggested_area", "Bishan")

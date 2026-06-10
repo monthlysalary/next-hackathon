@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import WelcomeScreen from './WelcomeScreen'
 import GroupSetup from './GroupSetup'
 import ResultsPanel from './ResultsPanel'
 import AuthModal from './AuthModal'
@@ -76,7 +77,7 @@ function mergePersonsFromServer(local, remote, preserveIndex) {
 
 export default function AppContent() {
   const { user, profile, signOut, configured: authConfigured, refreshProfile } = useAuth()
-  const [view, setView] = useState('setup')
+  const [view, setView] = useState('welcome')
   const [groupName, setGroupName] = useState('Our Group')
   const [mealType, setMealType] = useState('dinner')
   const [day, setDay] = useState(todayDateString())
@@ -139,14 +140,18 @@ export default function AppContent() {
     setError(null)
     try {
       let data = null
-      const res = await fetch(`${API_URL}/group/${sessionId}`)
-      if (res.ok) {
-        data = await res.json()
-      } else {
-        const sessionRes = await fetch(`${API_URL}/session/${sessionId}`)
-        if (sessionRes.ok) {
-          data = await sessionRes.json()
-        }
+      // Try session endpoint first
+      const sessionRes = await fetch(`${API_URL}/session/${sessionId}`)
+      if (sessionRes.ok) {
+        data = await sessionRes.json()
+      }
+
+      // Try group endpoint as fallback
+      if (!data) {
+        try {
+          const groupRes = await fetch(`${API_URL}/group/${sessionId}`)
+          if (groupRes.ok) data = await groupRes.json()
+        } catch { /* group endpoint may not exist */ }
       }
 
       if (!data && user) {
@@ -157,7 +162,9 @@ export default function AppContent() {
         data = cachedLocal?.session_data
       }
       if (!data) {
-        throw new Error('Group not found or expired. Ask the host for a new link.')
+        // Session doesn't exist — just go to setup instead of showing error
+        setView('setup')
+        return
       }
 
       if (isGroupSearchComplete(data)) {
@@ -303,15 +310,17 @@ export default function AppContent() {
         localStorage.setItem(getHostKey(data.session_id), 'true')
         setIsHost(true)
       } catch {
-        groupCreatedRef.current = false
+        // Don't reset the ref — avoid infinite retry loops when backend is down.
+        // The group will be created lazily when the user hits "Find Matches".
       }
     })()
-  }, [joinMode, groupSessionId, view, groupName, mealType, day, persons])
+  }, [joinMode, groupSessionId, view])
 
   // Host: sync setup to backend
   useEffect(() => {
     if (!groupSessionId || !isHost || view !== 'setup' || joinMode) return
 
+    const controller = new AbortController()
     const timer = setTimeout(async () => {
       try {
         await updateGroup(groupSessionId, {
@@ -321,20 +330,31 @@ export default function AppContent() {
           persons,
         })
       } catch {
-        /* ignore sync errors */
+        /* ignore sync errors — backend may be unavailable */
       }
     }, 800)
 
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
   }, [groupSessionId, isHost, joinMode, view, groupName, mealType, day, persons])
 
   // Poll group for joiners (setup) or redirect when search completes
   useEffect(() => {
     if (!groupSessionId || view !== 'setup') return
+    // Only poll when in join mode (waiting for host) or when host has shared the link.
+    // Skip polling entirely when user is a solo host with no joiners — avoids
+    // noisy failed fetches when backend is unavailable.
+    if (!joinMode && !new URLSearchParams(window.location.search).get('join')) return
+
+    let cancelled = false
 
     const poll = async () => {
+      if (cancelled) return
       try {
         const data = await fetchGroup(groupSessionId)
+        if (cancelled) return
         if (isGroupSearchComplete(data)) {
           applySearchResults(data)
           return
@@ -350,13 +370,16 @@ export default function AppContent() {
         if (data.meal_type) setMealType(data.meal_type)
         if (data.day) setDay(normalizeDay(data.day))
       } catch {
-        /* ignore */
+        /* ignore — backend might be unreachable */
       }
     }
 
     poll()
     const interval = setInterval(poll, 5000)
-    return () => clearInterval(interval)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
   }, [groupSessionId, view, joinMode, joinSlotIndex, applySearchResults])
 
   useEffect(() => {
@@ -466,12 +489,16 @@ export default function AppContent() {
       }))
 
       if (groupSessionId && isHost) {
-        await updateGroup(groupSessionId, {
-          group_name: groupName,
-          meal_type: mealType,
-          day,
-          persons,
-        })
+        try {
+          await updateGroup(groupSessionId, {
+            group_name: groupName,
+            meal_type: mealType,
+            day,
+            persons,
+          })
+        } catch {
+          // Group sync not available — proceed with search anyway
+        }
       }
 
       const res = await fetch(`${API_URL}/find`, {
@@ -524,6 +551,18 @@ export default function AppContent() {
         body: JSON.stringify({
           session_id: result.session_id,
           message,
+          // Send context so refine works even if backend lost the session
+          persons: persons.map((p) => ({
+            ...p,
+            dietary: (p.dietary || []).map((d) => DIETARY_MAP[d] || (d || '').toLowerCase()),
+            cuisine_loves: p.cuisine_loves || [],
+            must_have: (p.must_have || []).map((m) => MUST_HAVE_MAP[m] || (m || '').toLowerCase()),
+            avoid: (p.avoid || []).map((a) => (a || '').toLowerCase()),
+          })),
+          meal_type: mealType,
+          day: day,
+          suggested_area: result.suggested_area,
+          group_name: groupName,
         }),
       })
       if (!res.ok) {
@@ -599,7 +638,29 @@ export default function AppContent() {
     setJoinMode(false)
     setIsHost(true)
     setJoinSlotIndex(null)
+    setGroupSessionId(null)
     groupCreatedRef.current = false
+  }
+
+  const handleClearHistory = () => {
+    if (!window.confirm('Clear all saved sessions and history? This cannot be undone.')) {
+      return
+    }
+    localStorage.removeItem(SESSION_KEY)
+    localStorage.removeItem(VOTER_KEY)
+    localStorage.removeItem(PRO_KEY)
+    localStorage.removeItem(SUBSCRIPTION_KEY)
+    // Clear any daily search counts
+    const today = new Date().toISOString().slice(0, 10)
+    localStorage.removeItem(`tablefor_daily_${today}`)
+    setHasSavedSession(false)
+    setUserSessions([])
+    setResult(null)
+    setGroupSessionId(null)
+    setVotes({})
+    setVoters([])
+    setSavedRestaurants([])
+    setError(null)
   }
 
   const handleContinueSession = () => {
@@ -668,10 +729,11 @@ export default function AppContent() {
 
   return (
     <div className="min-h-full bg-bg">
-      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-border px-4 py-2.5">
+      {view !== 'welcome' && (
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-border px-4 py-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-accent">TableFor</span>
+            <img src="/logo.jpg" alt="TableFor" className="h-7 w-auto rounded-md" />
             {isPro && (
               <span className="px-1.5 py-0.5 rounded-full bg-accent/20 text-accent text-[10px] font-bold">
                 PRO
@@ -728,6 +790,7 @@ export default function AppContent() {
           </div>
         </div>
       </header>
+      )}
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
 
@@ -744,7 +807,15 @@ export default function AppContent() {
         </div>
       )}
 
-      {view === 'setup' ? (
+      {view === 'welcome' ? (
+        <WelcomeScreen
+          onGetStarted={() => setView('setup')}
+          onDemo={handleDemo}
+          hasSavedSession={hasSavedSession}
+          onContinueSession={handleContinueSession}
+          onClearHistory={handleClearHistory}
+        />
+      ) : view === 'setup' ? (
         <GroupSetup
           groupName={groupName}
           setGroupName={setGroupName}

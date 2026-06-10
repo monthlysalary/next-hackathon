@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useImperativeHandle } from 'react'
+import { useState, useRef, useEffect, useImperativeHandle } from 'react'
 import LocationField from './LocationField'
 import {
   BUDGET_OPTIONS,
@@ -292,17 +292,24 @@ export default function PersonSetupWizard({
   const dietaryRef = useRef(null)
   const cuisineRef = useRef(null)
   const notesRef = useRef(person.notes || '')
+  const [localName, setLocalName] = useState(person.name)
+
+  // Sync localName when person changes externally
+  useEffect(() => {
+    setLocalName(person.name)
+  }, [person.name])
 
   const update = (field, value) => {
     onChange(index, { ...person, [field]: value })
   }
 
   const canProceed = () => {
-    if (step === 1) return person.name.trim() && person.location.trim()
+    if (step === 1) return localName.trim() && person.location.trim()
     return true
   }
 
   const goNext = () => {
+    if (step === 1) update('name', localName)
     if (step === 3) dietaryRef.current?.commitPending()
     if (step === 4) cuisineRef.current?.commitPending()
     if (step < TOTAL_STEPS && canProceed()) onStepChange(step + 1)
@@ -404,8 +411,9 @@ export default function PersonSetupWizard({
             <div className="bg-surface-raised rounded-[14px] flex items-center px-3.5 h-[52px] border border-border focus-within:border-accent">
               <input
                 type="text"
-                value={person.name}
-                onChange={(e) => update('name', e.target.value)}
+                value={localName}
+                onChange={(e) => setLocalName(e.target.value)}
+                onBlur={() => update('name', localName)}
                 placeholder="How should we call you?"
                 className="w-full bg-transparent border-none outline-none text-[15px] text-text-primary placeholder:text-text-secondary/50"
               />

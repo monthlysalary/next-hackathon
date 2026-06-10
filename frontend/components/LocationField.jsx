@@ -13,11 +13,17 @@ import { API_URL, SINGAPORE_AREAS } from '@/lib/constants'
 
 export default function LocationField({ value, onChange }) {
   const [allAreas, setAllAreas] = useState(SINGAPORE_AREAS)
+  const [localValue, setLocalValue] = useState(value)
   const [suggestions, setSuggestions] = useState([])
   const [locationError, setLocationError] = useState(null)
   const [gpsLoading, setGpsLoading] = useState(false)
   const [gpsStatus, setGpsStatus] = useState(null)
   const debounceRef = useRef(null)
+
+  // Sync from parent only when value changes externally (e.g. GPS, area select)
+  useEffect(() => {
+    setLocalValue(value)
+  }, [value])
 
   useEffect(() => {
     fetch(`${API_URL}/areas`)
@@ -68,16 +74,20 @@ export default function LocationField({ value, onChange }) {
   )
 
   const handleInput = (next) => {
-    onChange(next)
+    setLocalValue(next)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     setLocationError(null)
     if (next.length >= 1) {
       setSuggestions(filterAreas(next))
       if (next.length >= 2) {
-        debounceRef.current = setTimeout(() => validateLocation(next), 300)
+        debounceRef.current = setTimeout(() => {
+          onChange(next)
+          validateLocation(next)
+        }, 400)
       }
     } else {
       setSuggestions(filterAreas(''))
+      onChange(next)
     }
   }
 
@@ -161,9 +171,10 @@ export default function LocationField({ value, onChange }) {
         <div className="flex-1 bg-surface-raised rounded-[14px] flex items-center px-3.5 h-[52px] border border-border focus-within:border-accent transition-colors">
           <input
             type="text"
-            value={value}
+            value={localValue}
             onChange={(e) => handleInput(e.target.value)}
-            onFocus={() => setSuggestions(filterAreas(value))}
+            onBlur={() => onChange(localValue)}
+            onFocus={() => setSuggestions(filterAreas(localValue))}
             placeholder="MRT station or area"
             className="w-full bg-transparent border-none outline-none text-[15px] text-text-primary placeholder:text-text-secondary/50"
           />

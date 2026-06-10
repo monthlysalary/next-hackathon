@@ -40,6 +40,12 @@ class JoinPersonRequest(BaseModel):
 class RefineRequest(BaseModel):
     session_id: str
     message: str
+    # Optional context so refine works even if session expired from backend
+    persons: list[PersonProfile] | None = None
+    meal_type: str | None = None
+    day: str | None = None
+    suggested_area: str | None = None
+    group_name: str | None = None
 
 
 class VoteRequest(BaseModel):

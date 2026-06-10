@@ -271,6 +271,20 @@ def gps_area(body: GpsRequest):
     return location.resolve_gps_area(body.latitude, body.longitude)
 
 
+@app.get("/menu/{restaurant_name:path}")
+def get_menu(restaurant_name: str):
+    """Search for a restaurant's menu. Returns empty if not found."""
+    menu_data = exa_search.search_menu(restaurant_name)
+    if not menu_data or not menu_data.get("menu_items"):
+        return {
+            "restaurant_name": restaurant_name,
+            "menu_items": [],
+            "source_url": None,
+            "note": None,
+        }
+    return menu_data
+
+
 @app.post("/create-checkout")
 def create_checkout():
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
