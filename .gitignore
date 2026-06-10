@@ -1,5 +1,6 @@
 .env
 .env.local
+.local-sessions.json
 __pycache__/
 *.py[cod]
 *.egg-info/
