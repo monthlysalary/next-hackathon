@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import WelcomeScreen from './WelcomeScreen'
 import GroupSetup from './GroupSetup'
 import ResultsPanel from './ResultsPanel'
 import SessionHome from './SessionHome'
@@ -17,7 +16,7 @@ import {
   todayDateString,
   normalizeDay,
 } from '@/lib/constants'
-import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro, deleteUserSession } from '@/lib/userDb'
+import { fetchUserSessions, saveUserSession, fetchUserSessionData, countUserSessionsToday, setUserPro } from '@/lib/userDb'
 import {
   FREE_MAX_PERSONS,
   PRO_MAX_PERSONS,
@@ -151,6 +150,7 @@ export default function AppContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [savedRestaurants, setSavedRestaurants] = useState([])
+  const [aiSuggestions, setAiSuggestions] = useState([])
   const [isPro, setIsPro] = useState(false)
   const [hasSavedSession, setHasSavedSession] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
@@ -584,6 +584,7 @@ export default function AppContent() {
     setLoading(true)
     setError(null)
     setResult(null)
+    setAiSuggestions([])
     skipResultsRedirectRef.current = true
     findInProgressRef.current = true
     try {
@@ -765,6 +766,7 @@ export default function AppContent() {
     setDay(todayDateString())
     setResult(DEMO_RESULT)
     setSavedRestaurants([])
+    setAiSuggestions([])
     setVotes({})
     setVoters([])
     setView('results')
@@ -774,6 +776,7 @@ export default function AppContent() {
     skipResultsRedirectRef.current = true
     setView('setup')
     setResult(null)
+    setAiSuggestions([])
     setError(null)
     setJoinMode(false)
     setIsHost(true)
@@ -800,6 +803,7 @@ export default function AppContent() {
     setDay(todayDateString())
     setPersons([{ ...EMPTY_PERSON }, { ...EMPTY_PERSON }])
     setSavedRestaurants([])
+    setAiSuggestions([])
     setVotes({})
     setVoters([])
     setJoinMode(false)
@@ -1046,14 +1050,6 @@ export default function AppContent() {
           setPersons={setPersons}
           onFind={handleFind}
           loading={loading}
-          onContinueSession={handleContinueSession}
-          hasSavedSession={hasSavedSession}
-          userSessions={userSessions}
-          onLoadUserSession={loadSession}
-          onDeleteSession={handleDeleteSession}
-          loadingSessionId={loadingSessionId}
-          isSignedIn={Boolean(user)}
-          onSignIn={() => setAuthOpen(true)}
           isPro={isPro}
           onUpgrade={handleUpgrade}
           maxPersons={isPro ? PRO_MAX_PERSONS : FREE_MAX_PERSONS}

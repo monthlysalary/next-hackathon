@@ -504,7 +504,7 @@ export default function GroupSetup({
         )
       })()}
 
-      {/* Find button */}
+      {isHost && (
       <button
         type="button"
         onClick={handleFind}
