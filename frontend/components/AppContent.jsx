@@ -218,15 +218,10 @@ export default function AppContent() {
     }
   }, [user, profile?.is_pro])
 
-  // Poll votes every 5 seconds when on results view
-  // Poll votes every 15 seconds when on results view and session is shared
+  // Poll votes every 5 seconds when on results view for live updates
   useEffect(() => {
     if (view !== 'results' || !result?.session_id) return
     if (result.session_id === 'demo-session') return
-
-    // Only start polling if the session was loaded via a share link
-    const params = new URLSearchParams(window.location.search)
-    const isSharedSession = params.get('session') === result.session_id
 
     const poll = async () => {
       try {
@@ -241,10 +236,8 @@ export default function AppContent() {
       }
     }
 
-    // Fetch once immediately, then poll only if shared
     poll()
-    if (!isSharedSession) return
-    const interval = setInterval(poll, 15000)
+    const interval = setInterval(poll, 5000)
     return () => clearInterval(interval)
   }, [view, result?.session_id])
 
@@ -429,17 +422,6 @@ export default function AppContent() {
   const handleContinueSession = () => {
     const sessionId = localStorage.getItem(SESSION_KEY)
     if (sessionId) loadSession(sessionId)
-  }
-
-  const handleDeleteSession = async (sessionId) => {
-    if (!user) return
-    await deleteUserSession(user.id, sessionId)
-    setUserSessions((prev) => prev.filter((s) => s.session_id !== sessionId))
-    // Clear local storage if deleting the current session
-    if (localStorage.getItem(SESSION_KEY) === sessionId) {
-      localStorage.removeItem(SESSION_KEY)
-      setHasSavedSession(false)
-    }
   }
 
   const handleUpgrade = async () => {
