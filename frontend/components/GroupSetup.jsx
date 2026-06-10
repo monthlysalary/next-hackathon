@@ -405,6 +405,10 @@ export default function GroupSetup({
             onRemove={removePerson}
             canRemove={!joinMode && persons.length > 2}
             completed={personCompleted[wizardIndex]}
+            onSaveFriend={(p) => {
+              saveFriend(p)
+              setSavedFriends(getSavedFriends())
+            }}
             onComplete={(finalPerson) => {
               localEditRef.current.delete(wizardIndex)
               const next = [...persons]
