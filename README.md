@@ -164,6 +164,33 @@ cd frontend && npm run dev
 
 Click **Try demo** on the setup screen — pre-fills 4 friends and shows hardcoded results without calling the API.
 
+## Railway deployment (backend)
+
+1. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub repo**
+2. Select this repo — **do not** set root directory to `frontend` (backend runs from repo root)
+3. Railway reads `railway.toml` and installs from root `requirements.txt`
+4. Add these **Variables** in Railway → your service → **Variables**:
+
+| Variable | Description |
+|----------|-------------|
+| `EXA_API_KEY` | Exa restaurant search |
+| `MAPBOX_TOKEN` | Geocoding |
+| `ONEMAP_ACCESS_TOKEN` | Singapore travel times |
+| `BEDROCK_MODEL_ID` | e.g. `us.amazon.nova-lite-v1:0` |
+| `AWS_DEFAULT_REGION` | e.g. `us-west-2` |
+| `AWS_ACCESS_KEY_ID` | Long-lived IAM key (not temp session token) |
+| `AWS_SECRET_ACCESS_KEY` | IAM secret |
+| `AWS_VERIFY_SSL` | `true` for production |
+| `FRONTEND_URL` | Your Vercel URL, e.g. `https://your-app.vercel.app` |
+| `STRIPE_SECRET_KEY` | Optional |
+| `STRIPE_DEMO_FREE` | `true` to skip Stripe in demos |
+
+5. **Settings → Networking → Generate domain** → copy the URL (e.g. `https://tablefor-production.up.railway.app`)
+6. Set `NEXT_PUBLIC_API_URL` on Vercel to that Railway URL and redeploy the frontend
+7. Test: open `https://your-railway-url/health` → should return `{"status":"ok"}`
+
+> **Note:** `/find` can take 15–30s. Use long-lived AWS IAM credentials on Railway — temporary `AWS_SESSION_TOKEN` values expire and will break Bedrock/DynamoDB.
+
 ## AWS deployment (EC2)
 
 1. Launch t3.micro in `us-west-2`, open port 8000
