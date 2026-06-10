@@ -92,6 +92,15 @@ export default function RestaurantCard({
     ? restaurant.photo_url
     : getCuisineImage(restaurant.cuisine)
 
+  const handleViewMenu = () => {
+    if (restaurant.menu_url) {
+      window.open(restaurant.menu_url, '_blank', 'noopener,noreferrer')
+    } else if (restaurant.maps_url) {
+      // Fallback: open Google Maps which often has menu info
+      window.open(restaurant.maps_url, '_blank', 'noopener,noreferrer')
+    }
+  }
+
   const handleSave = async () => {
     if (isSaved || saving) return
     setSaving(true)

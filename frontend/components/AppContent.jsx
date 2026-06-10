@@ -67,6 +67,7 @@ export default function AppContent() {
   const [voterName, setVoterName] = useState('')
   const [votes, setVotes] = useState({})
   const [voters, setVoters] = useState([])
+  const [aiSuggestions, setAiSuggestions] = useState([])
 
   const applySessionPayload = (data) => {
     setResult({
@@ -120,6 +121,14 @@ export default function AppContent() {
       setError(e.message || 'Could not load session')
     } finally {
       setLoadingSessionId(null)
+    }
+  }
+
+  const handleDeleteSession = async (sessionId) => {
+    if (!user) return
+    const { error: err } = await deleteUserSession(user.id, sessionId)
+    if (!err) {
+      setUserSessions((prev) => prev.filter((s) => s.session_id !== sessionId))
     }
   }
 
@@ -349,9 +358,8 @@ export default function AppContent() {
         throw new Error(err.detail || 'Failed to refine results')
       }
       const data = await res.json()
-      setResult(data)
-      setVotes({})
-      setVoters([])
+      // Store AI suggestions separately — don't override existing results
+      setAiSuggestions(data.restaurants || [])
     } catch (e) {
       setError(e.message)
     } finally {
@@ -599,6 +607,7 @@ export default function AppContent() {
           onRestaurantSaved={handleRestaurantSaved}
           onRefine={handleRefine}
           loading={loading}
+          aiSuggestions={aiSuggestions}
           votes={votes}
           voters={voters}
           voterName={voterName}
