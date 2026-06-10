@@ -114,6 +114,66 @@ def get_session(session_id: str):
     return data
 
 
+def _is_person_empty(person: dict | None) -> bool:
+    if not person:
+        return True
+    return not (person.get("name") or "").strip() and not (
+        person.get("location") or ""
+    ).strip()
+
+
+def _merge_person_slot(local: dict | None, remote: dict | None) -> dict:
+    local = local or {}
+    remote = remote or {}
+
+    if _is_person_empty(remote) and not _is_person_empty(local):
+        return local
+    if _is_person_empty(local) and not _is_person_empty(remote):
+        return remote
+
+    merged = {**remote, **local}
+    if (local.get("name") or "").strip():
+        merged["name"] = local["name"]
+    else:
+        merged["name"] = remote.get("name", "")
+    if (local.get("location") or "").strip():
+        merged["location"] = local["location"]
+    else:
+        merged["location"] = remote.get("location", "")
+    merged["latitude"] = (
+        local.get("latitude")
+        if local.get("latitude") is not None
+        else remote.get("latitude")
+    )
+    merged["longitude"] = (
+        local.get("longitude")
+        if local.get("longitude") is not None
+        else remote.get("longitude")
+    )
+    merged["budget"] = local.get("budget") or remote.get("budget") or ""
+    merged["dietary"] = local.get("dietary") or remote.get("dietary") or []
+    merged["cuisine_loves"] = (
+        local.get("cuisine_loves") or remote.get("cuisine_loves") or []
+    )
+    merged["must_have"] = local.get("must_have") or remote.get("must_have") or []
+    merged["avoid"] = local.get("avoid") or remote.get("avoid") or []
+    merged["notes"] = (
+        local.get("notes") or ""
+    ).strip() or (remote.get("notes") or "")
+    return merged
+
+
+def _merge_persons_list(local: list, remote: list) -> list:
+    max_len = max(len(local), len(remote))
+    return [
+        _merge_person_slot(
+            local[i] if i < len(local) else {},
+            remote[i] if i < len(remote) else {},
+        )
+        for i in range(max_len)
+    ]
+
+
 def _save_group_setup(session_id: str, payload: dict) -> dict:
     existing = dynamo.get_session(session_id) or {}
     data = {
@@ -171,14 +231,16 @@ def update_group(session_id: str, body: GroupSetupPayload):
             status_code=409,
             detail="This group already has results. Share the results link instead.",
         )
-    persons = [p.model_dump() for p in body.persons]
+    incoming_persons = [p.model_dump() for p in body.persons]
+    existing_persons = existing.get("persons", [])
+    merged_persons = _merge_persons_list(incoming_persons, existing_persons)
     return _save_group_setup(
         session_id,
         {
             "group_name": body.group_name,
             "meal_type": body.meal_type,
             "day": body.day,
-            "persons": persons,
+            "persons": merged_persons,
         },
     )
 

@@ -447,17 +447,28 @@ export default function AppContent() {
     })()
   }, [sessionReady, joinMode, groupSessionId, view, groupName, mealType, day, persons])
 
-  // Host: sync setup to backend
+  // Host: sync setup to backend (merge with server so guest join data isn't wiped)
   useEffect(() => {
     if (!groupSessionId || !isHost || view !== 'setup' || joinMode) return
 
     const timer = setTimeout(async () => {
       try {
+        const server = await fetchGroup(groupSessionId)
+        const mergedPersons = mergePersonsFromServer(
+          persons,
+          server.persons,
+          null,
+          true,
+        )
         await updateGroup(groupSessionId, {
           group_name: groupName,
           meal_type: mealType,
           day,
-          persons,
+          persons: mergedPersons,
+        })
+        setPersons((prev) => {
+          const next = mergePersonsFromServer(prev, server.persons, null, true)
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next
         })
       } catch {
         /* ignore sync errors */
@@ -493,7 +504,8 @@ export default function AppContent() {
         if (data.meal_type) setMealType(data.meal_type)
         if (data.day) setDay(normalizeDay(data.day))
       } catch (e) {
-        if (!joinMode && isHost) {
+        const msg = e?.message || ''
+        if (!joinMode && isHost && msg.toLowerCase().includes('not found')) {
           clearStoredGroupSession(groupSessionId)
           setGroupSessionId(null)
           groupCreatedRef.current = false
@@ -502,7 +514,7 @@ export default function AppContent() {
     }
 
     poll()
-    const interval = setInterval(poll, 5000)
+    const interval = setInterval(poll, 2000)
     return () => clearInterval(interval)
   }, [groupSessionId, view, joinMode, joinSlotIndex, isHost, applySearchResults, clearStoredGroupSession])
 

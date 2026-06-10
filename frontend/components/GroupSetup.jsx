@@ -409,6 +409,7 @@ export default function GroupSetup({
               saveFriend(p)
               setSavedFriends(getSavedFriends())
             }}
+            joinMode={joinMode}
             onComplete={(finalPerson) => {
               localEditRef.current.delete(wizardIndex)
               const next = [...persons]
@@ -420,6 +421,7 @@ export default function GroupSetup({
                 next[wizardIndex] = true
                 return next
               })
+              setPersonStep(wizardIndex, PERSON_WIZARD_TOTAL_STEPS)
               if (joinMode && onGuestPersonComplete) {
                 onGuestPersonComplete(finalPerson, wizardIndex)
                 return
@@ -435,7 +437,7 @@ export default function GroupSetup({
                 next[wizardIndex] = false
                 return next
               })
-              setPersonStep(wizardIndex, 1)
+              setPersonStep(wizardIndex, PERSON_WIZARD_TOTAL_STEPS)
             }}
           />
         )}

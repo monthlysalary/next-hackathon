@@ -295,6 +295,7 @@ export default function PersonSetupWizard({
   onComplete,
   onModify,
   onSaveFriend,
+  joinMode = false,
 }) {
   const dietaryRef = useRef(null)
   const cuisineRef = useRef(null)
@@ -388,7 +389,7 @@ export default function PersonSetupWizard({
           onClick={onModify}
           className="w-full py-3 rounded-[14px] border border-border text-sm font-medium text-text-secondary hover:text-text-primary hover:border-accent transition-colors"
         >
-          Modify preferences
+          {joinMode ? '← Back to edit' : 'Modify preferences'}
         </button>
 
         {onSaveFriend && person.name.trim() && (
@@ -405,7 +406,7 @@ export default function PersonSetupWizard({
                 : 'bg-surface-raised text-text-secondary border border-border hover:border-accent hover:text-accent'
             }`}
           >
-            {friendSaved ? '✓ Remembered!' : '💾 Remember this friend'}
+            {friendSaved ? '✓ Remembered!' : 'Remember this friend'}
           </button>
         )}
       </div>
@@ -537,12 +538,12 @@ export default function PersonSetupWizard({
         </div>
       )}
 
-      <div className="flex gap-2 mt-6">
+      <div className="flex gap-2 mt-6 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
         {step > 1 && (
           <button
             type="button"
             onClick={goBack}
-            className="flex-1 py-3 rounded-[14px] border border-border text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
+            className="flex-1 py-3 rounded-[14px] border border-border text-sm font-medium text-text-secondary hover:text-text-primary transition-colors touch-manipulation"
           >
             Back
           </button>

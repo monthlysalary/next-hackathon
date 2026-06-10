@@ -302,7 +302,7 @@ export default function PersonCard({ person, index, onChange, onRemove, canRemov
                   : 'bg-surface-raised text-text-secondary border border-border hover:border-accent hover:text-accent'
               }`}
             >
-              {saved ? '✓ Remembered!' : '💾 Remember this friend'}
+              {saved ? '✓ Remembered!' : 'Remember this friend'}
             </button>
           )}
         </div>
