@@ -83,6 +83,9 @@ async def refine_restaurants(request: RefineRequest):
         return await agent.refine_results(request)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f"Refine error: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"Refine failed: {type(e).__name__}: {e}")
 
 
 @app.post("/vote")

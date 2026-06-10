@@ -96,6 +96,12 @@ def get_public_transit_route(
     if not token:
         return None
 
+    # Ensure all coords are float (guard against Decimal/str from DynamoDB)
+    origin_lat = float(origin_lat)
+    origin_lng = float(origin_lng)
+    dest_lat = float(dest_lat)
+    dest_lng = float(dest_lng)
+
     depart = _departure_datetime(meal_type, day)
     params = {
         "start": f"{origin_lat},{origin_lng}",
@@ -175,6 +181,14 @@ def compute_travel_summary(
             lng = person.get("longitude")
             location = person.get("location", "")
 
+        # Ensure coordinates are float (DynamoDB may return Decimal or str)
+        try:
+            lat = float(lat) if lat is not None else None
+            lng = float(lng) if lng is not None else None
+        except (ValueError, TypeError):
+            lat = None
+            lng = None
+
         if lat is None or lng is None:
             summary[name] = f"Unknown route from {location or name}"
             continue
@@ -225,6 +239,15 @@ def apply_travel_summary(
             coords = location.geocode_area(data.get("location", ""))
             data["latitude"] = coords["latitude"]
             data["longitude"] = coords["longitude"]
+
+        # Ensure coordinates are float (DynamoDB may return Decimal or str)
+        try:
+            data["latitude"] = float(data["latitude"]) if data.get("latitude") else None
+            data["longitude"] = float(data["longitude"]) if data.get("longitude") else None
+        except (ValueError, TypeError):
+            data["latitude"] = None
+            data["longitude"] = None
+
         enriched.append(data)
 
     area = parsed.get("suggested_area") or meetup_area

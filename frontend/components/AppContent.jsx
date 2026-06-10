@@ -39,6 +39,22 @@ const SESSION_KEY = 'tablefor_session_id'
 const VOTER_KEY = 'tablefor_voter_name'
 const PRO_KEY = 'tablefor_pro'
 const SUBSCRIPTION_KEY = 'tablefor_subscription_id'
+const CACHE_VERSION_KEY = 'tablefor_cache_version'
+const CURRENT_CACHE_VERSION = '2'
+
+// Clear all stale data when cache version changes
+if (typeof window !== 'undefined') {
+  const storedVersion = localStorage.getItem(CACHE_VERSION_KEY)
+  if (storedVersion !== CURRENT_CACHE_VERSION) {
+    const keysToRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && key.startsWith('tablefor_')) keysToRemove.push(key)
+    }
+    keysToRemove.forEach((k) => localStorage.removeItem(k))
+    localStorage.setItem(CACHE_VERSION_KEY, CURRENT_CACHE_VERSION)
+  }
+}
 
 const DIETARY_MAP = {
   Halal: 'halal',
@@ -142,10 +158,12 @@ export default function AppContent() {
     try {
       let data = null
       // Try session endpoint first
-      const sessionRes = await fetch(`${API_URL}/session/${sessionId}`)
-      if (sessionRes.ok) {
-        data = await sessionRes.json()
-      }
+      try {
+        const sessionRes = await fetch(`${API_URL}/session/${sessionId}`)
+        if (sessionRes.ok) {
+          data = await sessionRes.json()
+        }
+      } catch { /* backend unreachable — try fallbacks */ }
 
       // Try group endpoint as fallback
       if (!data) {
@@ -194,7 +212,14 @@ export default function AppContent() {
         setIsHost(isGroupHost || !join)
       }
     } catch (e) {
-      setError(e.message || 'Could not load group')
+      // Only show errors that aren't simple network failures
+      const msg = e.message || ''
+      if (msg !== 'Failed to fetch' && msg !== 'NetworkError when attempting to fetch resource.') {
+        setError(msg || 'Could not load group')
+      } else {
+        // Backend unreachable — silently go to setup
+        setView('setup')
+      }
     } finally {
       setLoadingSessionId(null)
     }
@@ -535,7 +560,13 @@ export default function AppContent() {
       setVoters([])
       setView('results')
     } catch (e) {
-      setError(e.message)
+      console.error('[TableFor] Find error:', e)
+      const msg = e.message || 'Something went wrong'
+      if (msg === 'Failed to fetch' || msg === 'NetworkError when attempting to fetch resource.') {
+        setError('Cannot reach the server. Make sure the backend is running on ' + API_URL)
+      } else {
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }
@@ -556,7 +587,7 @@ export default function AppContent() {
           persons: persons.map((p) => ({
             ...p,
             dietary: (p.dietary || []).map((d) => DIETARY_MAP[d] || (d || '').toLowerCase()),
-            cuisine_loves: p.cuisine_loves || [],
+            cuisine_loves: (p.cuisine_loves || []).map((c) => (c || '').toLowerCase()),
             must_have: (p.must_have || []).map((m) => MUST_HAVE_MAP[m] || (m || '').toLowerCase()),
             avoid: (p.avoid || []).map((a) => (a || '').toLowerCase()),
           })),
@@ -567,14 +598,20 @@ export default function AppContent() {
         }),
       })
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.detail || 'Failed to refine results')
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || `Server error (${res.status})`)
       }
       const data = await res.json()
       // Store AI suggestions separately — don't override existing results
       setAiSuggestions(data.restaurants || [])
     } catch (e) {
-      setError(e.message)
+      console.error('[TableFor] Refine error:', e)
+      const msg = e.message || 'Something went wrong'
+      if (msg === 'Failed to fetch' || msg === 'NetworkError when attempting to fetch resource.') {
+        setError('Cannot reach the server. Make sure the backend is running on ' + API_URL)
+      } else {
+        setError(msg)
+      }
     } finally {
       setLoading(false)
     }
